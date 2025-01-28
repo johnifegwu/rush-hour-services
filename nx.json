@@ -38,7 +38,13 @@
       "options": {
         "targetName": "test"
       },
-      "exclude": ["apps/rush-hour-services-e2e/**/*"]
+      "exclude": [
+        "apps/rush-hour-services-e2e/**/*",
+        "apps/gateway-e2e/**/*",
+        "apps/api-e2e/**/*",
+        "apps/worker-e2e/**/*",
+        "apps/cron-e2e/**/*"
+      ]
     }
   ]
 }
