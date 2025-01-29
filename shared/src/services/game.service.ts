@@ -484,7 +484,12 @@ export class GameService {
     }
 
     async getMoveCarResult(gameId: string) {
+        const game = await this.getGame(gameId);
+        if (!game) {
+            throw new NotFoundException('Game not found');
+        }
 
+        return game;
     }
 
     async calcMoveQuality(gameId: string, moveCarDto: MoveCarDto) {
