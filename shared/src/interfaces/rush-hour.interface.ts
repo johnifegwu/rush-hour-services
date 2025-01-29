@@ -39,3 +39,12 @@ export enum MoveQuality {
     WASTE = 'WASTE',
     BLUNDER = 'BLUNDER'
 }
+
+export interface AnalysisResult {
+    totalMoves: number;
+    goodMoves: number;
+    wasteMoves: number;
+    blunders: number;
+    efficiency: number;
+    timeSpent: number;
+}

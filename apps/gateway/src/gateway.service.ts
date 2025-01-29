@@ -5,9 +5,32 @@ import { firstValueFrom } from 'rxjs';
 
 @Injectable()
 export class GatewayService {
+
     constructor(
         @Inject('API_SERVICE') private readonly apiClient: ClientProxy,
     ) { }
+
+    getBoards(difficulty: string | undefined) {
+        throw new Error('Method not implemented.');
+    }
+    getBoard(boardId: string) {
+        throw new Error('Method not implemented.');
+    }
+    getHint(gameId: string) {
+        throw new Error('Method not implemented.');
+    }
+    getSolution(gameId: string) {
+        throw new Error('Method not implemented.');
+    }
+    getAnalysis(gameId: string) {
+        throw new Error('Method not implemented.');
+    }
+    abandonGame(gameId: string) {
+        throw new Error('Method not implemented.');
+    }
+    getLeaderboard(timeFrame: string) {
+        throw new Error('Method not implemented.');
+    }
 
     async createBoard(createBoardDto: CreateBoardDto) {
         return firstValueFrom(

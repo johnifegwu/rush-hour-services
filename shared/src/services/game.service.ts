@@ -3,9 +3,10 @@ import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { Board, Game } from '../schemas';
 import { MoveCarDto } from '../dto/move-car.dto';
-import { RedisService } from 'shared/src/services';
-import { BadRequestException, NotFoundException } from 'shared/src/exceptions';
-import { GameMove, MovementDirection, MoveQuality } from 'shared/src/interfaces/rush-hour.interface';
+import { RedisService } from './redis.service';
+import { RabbitMQService } from './rabbitmq.service';
+import { BadRequestException, NotFoundException } from '../exceptions';
+import { GameMove, MovementDirection, MoveQuality } from '../interfaces/rush-hour.interface';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
 
 interface PriorityQueueNode {
@@ -27,7 +28,8 @@ class PriorityQueue {
         const min = this.heap[0];
         const last = this.heap.pop();
 
-        if (this.heap.length > 0) {
+        // Add null check for last element
+        if (this.heap.length > 0 && last !== undefined) {
             this.heap[0] = last;
             this.bubbleDown(0);
         }
@@ -86,7 +88,7 @@ interface State {
 
 @Injectable()
 export class GameService {
-    private readonly stateCache: Map<string, number> = new Map();
+    //private readonly stateCache: Map<string, number> = new Map();
     private readonly MAX_BOARD_SIZE = 6; // Standard Rush Hour board size
     private readonly MAX_SEARCH_STATES = 100000;
     private readonly PARALLEL_CHUNK_SIZE = 1000;
@@ -95,11 +97,12 @@ export class GameService {
         @InjectModel(Board.name) private readonly boardModel: Model<Board>,
         @InjectModel(Game.name) private readonly gameModel: Model<Game>,
         private readonly redisService: RedisService,
+        private readonly rabbitMQService: RabbitMQService,
     ) { }
 
     async createBoard(matrix: number[][]) {
         const board = new this.boardModel({ matrix });
-        return board.save();
+        return await board.save();
     }
 
     async startGame(boardId: string) {
@@ -114,16 +117,379 @@ export class GameService {
             minimumMovesRequired: 0,
         });
 
-        return game.save();
+        await game.save();
+        //Save to redis
+        this.redisService.setGame(game.id, game);
     }
 
-    async getGame(gameId: string) {
-        return this.gameModel.findById(gameId);
+    async getGame(gameId: string): Promise<Game> {
+        //Look for game in redis
+        let game = await this.redisService.getGame(gameId);
+
+        //Return game if found
+        if (game) return game as Game;
+
+        //Throw NotFoundException if game was not found
+        if (!game) throw new NotFoundException('Game not found');
+    }
+
+    private async updateGame(gameId: string, game: Game) {
+        //Update game to redis as games are archived to the database 
+        // when completed or inactive.
+        this.redisService.setGame(gameId, game);
+        return game;
+    }
+
+    async getBoards(difficulty?: string): Promise<Board[]> {
+        try {
+            const boards = await this.boardModel.find().exec();
+
+            if (difficulty) {
+                return boards.filter(board => this.getBoardDifficulty(board) === difficulty);
+            }
+
+            return boards;
+        } catch (error) {
+            throw new Error(`Failed to fetch boards: ${error.message}`);
+        }
+    }
+
+    async getBoard(boardId: string): Promise<Board> {
+        const board = await this.boardModel.findById(boardId).exec();
+
+        if (!board) {
+            throw new NotFoundException(`Board with ID ${boardId} not found`);
+        }
+
+        return board;
+    }
+
+    async getHint(gameId: string): Promise<Step> {
+        const game = await this.getGame(gameId);
+
+        if (game.isSolved) {
+            throw new Error('Game is already solved');
+        }
+
+        // Get all possible next moves
+        const currentState: State = {
+            matrix: game.currentState,
+            moves: game.moves.length
+        };
+
+        const possibleMoves = await this.generateNextMoves(currentState);
+
+        // Calculate minimum moves for each possible move
+        const movesWithQuality = await Promise.all(
+            possibleMoves.map(async (moveState) => {
+                const currentMinMoves = await this.calculateMinimumMoves(game.currentState, gameId);
+                const moveQuality = await this.calculateMoveQuality(
+                    moveState.matrix,
+                    currentMinMoves,
+                    gameId
+                );
+
+                // Find what changed between current state and new state to determine the move
+                const move = this.determineMove(game.currentState, moveState.matrix);
+
+                return {
+                    ...move,
+                    quality: moveQuality
+                };
+            })
+        );
+
+        // First try to find a GOOD move
+        const goodMove = movesWithQuality.find(move => move.quality === MoveQuality.GOOD);
+        if (goodMove) {
+            return {
+                carId: goodMove.carId,
+                direction: goodMove.direction
+            };
+        }
+
+        // If no GOOD moves, try to find a WASTE move
+        const wasteMove = movesWithQuality.find(move => move.quality === MoveQuality.WASTE);
+        if (wasteMove) {
+            return {
+                carId: wasteMove.carId,
+                direction: wasteMove.direction
+            };
+        }
+
+        // If no GOOD or WASTE moves, return the first BLUNDER move
+        // (this should rarely happen in a valid game state)
+        const firstMove = movesWithQuality[0];
+        return {
+            carId: firstMove.carId,
+            direction: firstMove.direction
+        };
+    }
+
+    private determineMove(currentState: number[][], newState: number[][]): {
+        carId: number;
+        direction: MovementDirection;
+    } {
+        // Compare the two states to determine which car moved and in what direction
+        for (let i = 0; i < currentState.length; i++) {
+            for (let j = 0; j < currentState[i].length; j++) {
+                if (currentState[i][j] !== newState[i][j]) {
+                    const carId = currentState[i][j] !== 0 ? currentState[i][j] : newState[i][j];
+
+                    // Find where the car moved to determine direction
+                    const currentPositions = this.findCarPositions(currentState, carId);
+                    const newPositions = this.findCarPositions(newState, carId);
+
+                    const direction = this.getMovementDirection(currentPositions, newPositions);
+
+                    return { carId, direction };
+                }
+            }
+        }
+
+        throw new Error('No move detected between states');
+    }
+
+    private findCarPositions(state: number[][], carId: number): { row: number; col: number }[] {
+        const positions: { row: number; col: number }[] = [];
+
+        for (let i = 0; i < state.length; i++) {
+            for (let j = 0; j < state[i].length; j++) {
+                if (state[i][j] === carId) {
+                    positions.push({ row: i, col: j });
+                }
+            }
+        }
+
+        return positions;
+    }
+
+    private getMovementDirection(
+        oldPositions: { row: number; col: number }[],
+        newPositions: { row: number; col: number }[]
+    ): MovementDirection {
+        const oldCenter = this.calculateCenter(oldPositions);
+        const newCenter = this.calculateCenter(newPositions);
+
+        if (newCenter.row < oldCenter.row) return MovementDirection.Up;
+        if (newCenter.row > oldCenter.row) return MovementDirection.Down;
+        if (newCenter.col < oldCenter.col) return MovementDirection.Left;
+        if (newCenter.col > oldCenter.col) return MovementDirection.Right;
+
+        throw new Error('Unable to determine movement direction');
+    }
+
+    private calculateCenter(positions: { row: number; col: number }[]): { row: number; col: number } {
+        const sum = positions.reduce(
+            (acc, pos) => ({ row: acc.row + pos.row, col: acc.col + pos.col }),
+            { row: 0, col: 0 }
+        );
+
+        return {
+            row: sum.row / positions.length,
+            col: sum.col / positions.length
+        };
+    }
+
+    async getSolution(gameId: string): Promise<Step[]> {
+        const game = await this.getGame(gameId);
+        const solution = await this.calculateSolutionPath(game.currentState);
+
+        await this.abandonGame(gameId);
+
+        return solution;
+    }
+
+    private async calculateSolutionPath(state: number[][]): Promise<Step[]> {
+        const visited = new Map<string, {
+            previousState: number[][] | null;
+            move: Step | null
+        }>();
+        const queue = new PriorityQueue();
+        const initialState: State = { matrix: state, moves: 0 };
+
+        this.initializeSearch(initialState, queue, visited);
+        const finalState = await this.findSolution(queue, visited);
+        return this.reconstructPath(finalState, visited);
+    }
+
+    private initializeSearch(
+        initialState: State,
+        queue: PriorityQueue,
+        visited: Map<string, { previousState: number[][] | null; move: Step | null }>
+    ): void {
+        queue.enqueue(initialState, this.calculateEnhancedHeuristic(initialState.matrix));
+        visited.set(this.getStateKey(initialState.matrix), { previousState: null, move: null });
+    }
+
+    private async findSolution(
+        queue: PriorityQueue,
+        visited: Map<string, { previousState: number[][] | null; move: Step | null }>
+    ): Promise<number[][]> {
+        while (queue.length > 0) {
+            if (visited.size > this.MAX_SEARCH_STATES) {
+                throw new Error('Search space exceeded maximum allowed states');
+            }
+
+            const currentState = queue.dequeue();
+            if (!currentState) continue;
+
+            if (this.checkWinCondition(currentState.matrix)) {
+                return currentState.matrix;
+            }
+
+            await this.processNextMoves(currentState, queue, visited);
+        }
+
+        throw new Error('No solution found');
+    }
+
+    private async processNextMoves(
+        currentState: State,
+        queue: PriorityQueue,
+        visited: Map<string, { previousState: number[][] | null; move: Step | null }>
+    ): Promise<void> {
+        const nextMoves = await this.generateNextMoves(currentState);
+
+        for (const nextState of nextMoves) {
+            const nextStateKey = this.getStateKey(nextState.matrix);
+            if (!visited.has(nextStateKey)) {
+                this.addNewState(currentState, nextState, nextStateKey, queue, visited);
+            }
+        }
+    }
+
+    private addNewState(
+        currentState: State,
+        nextState: State,
+        nextStateKey: string,
+        queue: PriorityQueue,
+        visited: Map<string, { previousState: number[][] | null; move: Step | null }>
+    ): void {
+        const move = this.determineMove(currentState.matrix, nextState.matrix);
+        visited.set(nextStateKey, {
+            previousState: currentState.matrix,
+            move: move
+        });
+
+        const priority = nextState.moves + this.calculateEnhancedHeuristic(nextState.matrix);
+        queue.enqueue(nextState, priority);
+    }
+
+    private reconstructPath(
+        finalState: number[][],
+        visited: Map<string, { previousState: number[][] | null; move: Step | null }>
+    ): Step[] {
+        const solution: Step[] = [];
+        let currentState = finalState;
+
+        while (currentState) {
+            const visitedInfo = visited.get(this.getStateKey(currentState));
+            if (!visitedInfo) break;
+
+            if (visitedInfo.move) {
+                solution.unshift(visitedInfo.move);
+            }
+
+            currentState = visitedInfo.previousState;
+        }
+
+        return solution;
+    }
+
+    async getAnalysis(gameId: string): Promise<{
+        totalMoves: number;
+        goodMoves: number;
+        wasteMoves: number;
+        blunders: number;
+        efficiency: number;
+        timeSpent: number;
+    }> {
+        const game = await this.getGame(gameId);
+
+        const analysis = {
+            totalMoves: game.moves.length,
+            goodMoves: game.moves.filter(move => move.moveQuality === MoveQuality.GOOD).length,
+            wasteMoves: game.moves.filter(move => move.moveQuality === MoveQuality.WASTE).length,
+            blunders: game.moves.filter(move => move.moveQuality === MoveQuality.BLUNDER).length,
+            efficiency: (game.minimumMovesRequired / game.moves.length) * 100,
+            timeSpent: this.calculateTimeSpent(game.moves)
+        };
+
+        // Save analysis to redis
+        await this.redisService.saveAnalysisResult(gameId, analysis);
+
+        return analysis;
+    }
+
+    async abandonGame(gameId: string): Promise<void> {
+        const game = await this.getGame(gameId);
+
+        if (game.isSolved) {
+            throw new Error('Cannot abandon already solved game');
+        }
+
+        game.lastMoveAt = new Date();
+        await this.updateGame(gameId, game);
+    }
+
+    async getLeaderboard(timeFrame: string): Promise<{
+        gameId: string;
+        boardId: string;
+        moves: number;
+        efficiency: number;
+        timeSpent: number;
+        completedAt: Date;
+    }[]> {
+        const startDate = this.getTimeFrameDate(timeFrame);
+
+        const games = await this.gameModel.find({
+            isSolved: true,
+            lastMoveAt: { $gte: startDate }
+        }).exec();
+
+        const leaderboardEntries = games.map(game => ({
+            gameId: game.id,
+            boardId: game.boardId,
+            moves: game.moves.length,
+            efficiency: (game.minimumMovesRequired / game.moves.length) * 100,
+            timeSpent: this.calculateTimeSpent(game.moves),
+            completedAt: game.lastMoveAt
+        }));
+
+        return leaderboardEntries.sort((a, b) => {
+            if (a.efficiency !== b.efficiency) return b.efficiency - a.efficiency;
+            if (a.moves !== b.moves) return a.moves - b.moves;
+            return a.timeSpent - b.timeSpent;
+        });
     }
 
     async moveCar(gameId: string, moveCarDto: MoveCarDto): Promise<Game> {
+        const game = await this.getGame(gameId);
+        if (!game) {
+            throw new NotFoundException('Game not found');
+        }
+
+        // Optionally send to archive queue for additional processing
+        const calcMovePayload: CalcMoveQuality = {
+            type: 'CALC_MOVE',
+            gameId: game.id,
+            moveCarDto: moveCarDto
+        };
+
+        this.rabbitMQService.sendToQueue('move_calculation', calcMovePayload);
+
+
+        return game;
+    }
+
+    async getMoveCarResult(gameId: string) {
+
+    }
+
+    async calcMoveQuality(gameId: string, moveCarDto: MoveCarDto) {
         // Find the game by ID
-        const game = await this.gameModel.findById(gameId);
+        const game = await this.getGame(gameId);
         if (!game) {
             throw new NotFoundException('Game not found');
         }
@@ -170,13 +536,18 @@ export class GameService {
             minimumMovesRequired: minimumMovesAfter
         });
 
+        try {
 
-        // Save and return updated game
-        return await this.gameModel.findByIdAndUpdate(
-            gameId,
-            updatedGame,
-            { new: true }
-        );
+            //Save or update redis and return
+            await this.updateGame(gameId, updatedGame);
+
+            return updatedGame as Game;
+
+        } catch (error) {
+            // Handle Redis errors or other issues gracefully
+            console.error('Redis error:', error.message);
+            throw new Error('An error occurred while processing the game move');
+        }
     }
 
     private isCarPresent(matrix: number[][], carId: number): boolean {
@@ -296,7 +667,7 @@ export class GameService {
         }
     }
 
-    private async calculateMinimumMoves(state: number[][], gameId: string): Promise<number> {
+    async calculateMinimumMoves(state: number[][], gameId: string): Promise<number> {
         // Validate board size
         if (state.length > this.MAX_BOARD_SIZE || state[0].length > this.MAX_BOARD_SIZE) {
             throw new BadRequestException('Board size exceeds maximum allowed dimensions');
@@ -312,11 +683,6 @@ export class GameService {
             if (cachedValue !== null) {
                 return cachedValue; // Return cached value if it exists
             }
-
-            // Check cache first
-            // if (this.stateCache.has(stateKey)) { //replaced with Redis implementation.
-            //     return this.stateCache.get(stateKey);
-            // }
 
             const queue = new PriorityQueue();
             const visited = new Set<string>();
@@ -547,4 +913,338 @@ export class GameService {
     private getStateKey(matrix: number[][]): string {
         return matrix.map(row => row.join(',')).join(';');
     }
+
+    private calculateTimeSpent(moves: GameMove[]): number {
+        if (moves.length === 0) return 0;
+        return moves[moves.length - 1].timestamp.getTime() - moves[0].timestamp.getTime();
+    }
+
+    private getTimeFrameDate(timeFrame: string): Date {
+        const now = new Date();
+        switch (timeFrame) {
+            case 'daily':
+                return new Date(now.setHours(0, 0, 0, 0));
+            case 'weekly':
+                return new Date(now.setDate(now.getDate() - now.getDay()));
+            case 'monthly':
+                return new Date(now.setDate(1));
+            case 'allTime':
+                return new Date(0);
+            default:
+                return new Date(now.setDate(now.getDate() - 7));
+        }
+    }
+
+    private async getBoardDifficulty(board: Board): string {
+        // Implement difficulty calculation based on board complexity
+        const complexity = await this.calculateBoardComplexity(board);
+        if (complexity < 10) return 'easy';
+        if (complexity < 20) return 'medium';
+        return 'hard';
+    }
+
+    private async calculateBoardComplexity(board: Board): Promise<number> {
+        // Constants for weighting different factors
+        const CAR_COUNT_WEIGHT = 0.3;
+        const BLOCKING_CARS_WEIGHT = 0.35;
+        const EXIT_DISTANCE_WEIGHT = 0.2;
+        const CONGESTION_WEIGHT = 0.15;
+
+        try {
+            const matrix = board.matrix;
+
+            // Validate board size
+            if (matrix.length > this.MAX_BOARD_SIZE || matrix[0].length > this.MAX_BOARD_SIZE) {
+                throw new Error(`Board size exceeds maximum allowed dimensions of ${this.MAX_BOARD_SIZE}x${this.MAX_BOARD_SIZE}`);
+            }
+
+            // Calculate state space size estimation
+            const stateSpaceEstimate = this.estimateStateSpaceSize(matrix);
+            if (stateSpaceEstimate > this.MAX_SEARCH_STATES) {
+                // If estimated state space is too large, consider it maximum difficulty
+                return 100;
+            }
+
+            // 1. Count number of cars and create a map of car positions
+            const carPositions = new Map<number, {
+                positions: [number, number][],
+                orientation: 'horizontal' | 'vertical',
+                movementRange: number
+            }>();
+            let carCount = 0;
+
+            for (let i = 0; i < matrix.length; i++) {
+                for (let j = 0; j < matrix[i].length; j++) {
+                    const cell = matrix[i][j];
+                    if (cell > 0) {
+                        if (!carPositions.has(cell)) {
+                            carCount++;
+                            carPositions.set(cell, {
+                                positions: [],
+                                orientation: 'horizontal',
+                                movementRange: 0
+                            });
+                        }
+                        carPositions.get(cell)?.positions.push([i, j]);
+                    }
+                }
+            }
+
+            // Process in chunks if there are many cars
+            const processInChunks = carCount > this.PARALLEL_CHUNK_SIZE;
+
+            // 2. Determine car orientations and movement ranges
+            if (processInChunks) {
+                const chunks = this.chunkArray(Array.from(carPositions.entries()), this.PARALLEL_CHUNK_SIZE);
+                await Promise.all(chunks.map(chunk =>
+                    this.processCarChunk(chunk, matrix)
+                ));
+            } else {
+                carPositions.forEach((car, id) => {
+                    car.orientation = car.positions[0][0] === car.positions[1][0] ? 'horizontal' : 'vertical';
+                    car.movementRange = this.calculateCarMovementRange(car, matrix);
+                });
+            }
+
+            const targetCar = carPositions.get(1);
+            if (!targetCar) {
+                throw new Error('Target car not found');
+            }
+
+            // 3. Calculate blocking factors
+            const blockingFactors = this.calculateBlockingFactors(targetCar, matrix, carPositions);
+
+            // 4. Calculate exit distance (normalized)
+            const targetLastCol = Math.max(...targetCar.positions.map(pos => pos[1]));
+            const exitDistance = (matrix.length - 1 - targetLastCol) / matrix.length;
+
+            // 5. Calculate congestion score
+            const congestionScore = this.calculateCongestionScore(matrix, carPositions);
+
+            // 6. Calculate movement restriction score
+            const movementRestrictionScore = this.calculateMovementRestrictionScore(carPositions, matrix);
+
+            // Calculate final complexity score (0-100 scale)
+            const complexityScore = Math.round(
+                (carCount / this.MAX_BOARD_SIZE * CAR_COUNT_WEIGHT +
+                    blockingFactors.normalizedScore * BLOCKING_CARS_WEIGHT +
+                    exitDistance * EXIT_DISTANCE_WEIGHT +
+                    congestionScore * CONGESTION_WEIGHT +
+                    movementRestrictionScore * 0.5) * 100
+            );
+
+            return Math.min(Math.max(complexityScore, 0), 100);
+
+        } catch (error) {
+            console.error('Error calculating board complexity:', error);
+            return 50; // Return medium difficulty if calculation fails
+        }
+    }
+
+    private estimateStateSpaceSize(matrix: number[][]): number {
+        const cars = new Set<number>();
+        matrix.forEach(row => row.forEach(cell => {
+            if (cell > 0) cars.add(cell);
+        }));
+
+        // Rough estimate: each car can move in 4 directions with average of 3 possible positions
+        return Math.pow(12, cars.size);
+    }
+
+    private async processCarChunk(
+        chunk: [number, { positions: [number, number][]; orientation: string; movementRange: number }][],
+        matrix: number[][]
+    ): Promise<void> {
+        chunk.forEach(([id, car]) => {
+            car.orientation = car.positions[0][0] === car.positions[1][0] ? 'horizontal' : 'vertical';
+            car.movementRange = this.calculateCarMovementRange(car, matrix);
+        });
+    }
+
+    private calculateCarMovementRange(
+        car: { positions: [number, number][]; orientation: string },
+        matrix: number[][]
+    ): number {
+        return car.orientation === 'horizontal'
+            ? this.calculateHorizontalMovementRange(car, matrix)
+            : this.calculateVerticalMovementRange(car, matrix);
+    }
+
+    private calculateHorizontalMovementRange(
+        car: { positions: [number, number][] },
+        matrix: number[][]
+    ): number {
+        const row = car.positions[0][0];
+        const [minCol, maxCol] = this.getColumnBoundaries(car.positions);
+
+        const leftRange = this.calculateLeftRange(row, minCol, matrix);
+        const rightRange = this.calculateRightRange(row, maxCol, matrix);
+
+        return leftRange + rightRange;
+    }
+
+    private calculateVerticalMovementRange(
+        car: { positions: [number, number][] },
+        matrix: number[][]
+    ): number {
+        const col = car.positions[0][1];
+        const [minRow, maxRow] = this.getRowBoundaries(car.positions);
+
+        const upwardRange = this.calculateUpwardRange(col, minRow, matrix);
+        const downwardRange = this.calculateDownwardRange(col, maxRow, matrix);
+
+        return upwardRange + downwardRange;
+    }
+
+    private getColumnBoundaries(positions: [number, number][]): [number, number] {
+        const cols = positions.map(pos => pos[1]);
+        return [Math.min(...cols), Math.max(...cols)];
+    }
+
+    private getRowBoundaries(positions: [number, number][]): [number, number] {
+        const rows = positions.map(pos => pos[0]);
+        return [Math.min(...rows), Math.max(...rows)];
+    }
+
+    private calculateLeftRange(row: number, minCol: number, matrix: number[][]): number {
+        let range = 0;
+        for (let col = minCol - 1; col >= 0 && matrix[row][col] === 0; col--) {
+            range++;
+        }
+        return range;
+    }
+
+    private calculateRightRange(row: number, maxCol: number, matrix: number[][]): number {
+        let range = 0;
+        for (let col = maxCol + 1; col < matrix[0].length && matrix[row][col] === 0; col++) {
+            range++;
+        }
+        return range;
+    }
+
+    private calculateUpwardRange(col: number, minRow: number, matrix: number[][]): number {
+        let range = 0;
+        for (let row = minRow - 1; row >= 0 && matrix[row][col] === 0; row--) {
+            range++;
+        }
+        return range;
+    }
+
+    private calculateDownwardRange(col: number, maxRow: number, matrix: number[][]): number {
+        let range = 0;
+        for (let row = maxRow + 1; row < matrix.length && matrix[row][col] === 0; row++) {
+            range++;
+        }
+        return range;
+    }
+
+
+    private calculateBlockingFactors(
+        targetCar: { positions: [number, number][]; orientation: string },
+        matrix: number[][],
+        carPositions: Map<number, any>
+    ): { normalizedScore: number; directBlocking: number } {
+        let directBlocking = 0;
+        let indirectBlocking = 0;
+        const targetRow = targetCar.positions[0][0];
+        const targetLastCol = Math.max(...targetCar.positions.map(pos => pos[1]));
+
+        // Count direct blocking cars
+        for (let col = targetLastCol + 1; col < matrix[0].length; col++) {
+            if (matrix[targetRow][col] > 0) {
+                directBlocking++;
+                // Check if blocking cars are themselves blocked
+                const blockingCarId = matrix[targetRow][col];
+                const blockingCar = carPositions.get(blockingCarId);
+                if (blockingCar && this.isCarBlocked(blockingCar, matrix)) {
+                    indirectBlocking++;
+                }
+            }
+        }
+
+        // Normalize the blocking score
+        const maxPossibleBlocking = matrix[0].length - targetLastCol - 1;
+        const normalizedScore = (directBlocking + (indirectBlocking * 0.5)) / maxPossibleBlocking;
+
+        return { normalizedScore, directBlocking };
+    }
+
+    private calculateCongestionScore(
+        matrix: number[][],
+        carPositions: Map<number, any>
+    ): number {
+        const totalCells = matrix.length * matrix[0].length;
+        const occupiedCells = Array.from(carPositions.values())
+            .reduce((sum, car) => sum + car.positions.length, 0);
+
+        return occupiedCells / totalCells;
+    }
+
+    private calculateMovementRestrictionScore(
+        carPositions: Map<number, any>,
+        matrix: number[][]
+    ): number {
+        let totalRestriction = 0;
+        const maxRestriction = carPositions.size * 4; // Maximum 4 directions per car
+
+        carPositions.forEach((car) => {
+            const restrictedDirections = 4 - this.getAvailableDirections(car, matrix).length;
+            totalRestriction += restrictedDirections;
+        });
+
+        return totalRestriction / maxRestriction;
+    }
+
+    private getAvailableDirections(car: any, matrix: number[][]): MovementDirection[] {
+        const directions: MovementDirection[] = [];
+        const isHorizontal = car.orientation === 'horizontal';
+
+        if (isHorizontal) {
+            if (this.canMoveLeft(car, matrix)) directions.push(MovementDirection.Left);
+            if (this.canMoveRight(car, matrix)) directions.push(MovementDirection.Right);
+        } else {
+            if (this.canMoveUp(car, matrix)) directions.push(MovementDirection.Up);
+            if (this.canMoveDown(car, matrix)) directions.push(MovementDirection.Down);
+        }
+
+        return directions;
+    }
+
+    private chunkArray<T>(array: T[], size: number): T[][] {
+        const chunks: T[][] = [];
+        for (let i = 0; i < array.length; i += size) {
+            chunks.push(array.slice(i, i + size));
+        }
+        return chunks;
+    }
+
+    private isCarBlocked(car: any, matrix: number[][]): boolean {
+        return this.getAvailableDirections(car, matrix).length === 0;
+    }
+
+    // Helper methods for movement checks
+    private canMoveLeft(car: any, matrix: number[][]): boolean {
+        const row = car.positions[0][0];
+        const minCol = Math.min(...car.positions.map(pos => pos[1]));
+        return minCol > 0 && matrix[row][minCol - 1] === 0;
+    }
+
+    private canMoveRight(car: any, matrix: number[][]): boolean {
+        const row = car.positions[0][0];
+        const maxCol = Math.max(...car.positions.map(pos => pos[1]));
+        return maxCol < matrix[0].length - 1 && matrix[row][maxCol + 1] === 0;
+    }
+
+    private canMoveUp(car: any, matrix: number[][]): boolean {
+        const col = car.positions[0][1];
+        const minRow = Math.min(...car.positions.map(pos => pos[0]));
+        return minRow > 0 && matrix[minRow - 1][col] === 0;
+    }
+
+    private canMoveDown(car: any, matrix: number[][]): boolean {
+        const col = car.positions[0][1];
+        const maxRow = Math.max(...car.positions.map(pos => pos[0]));
+        return maxRow < matrix.length - 1 && matrix[maxRow + 1][col] === 0;
+    }
+
 }

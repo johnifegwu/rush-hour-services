@@ -1,28 +1,32 @@
 import { Module } from '@nestjs/common';
+import { ConfigModule } from '@nestjs/config';
 import { GatewayController } from './gateway.controller';
-import { ClientsModule, Transport } from '@nestjs/microservices';
-import { ConfigModule, ConfigService } from '@nestjs/config';
-import configuration from '../../../shared/src/config/configuration';
+import { GatewayService } from './gateway.service';
+import { RabbitMQService, RedisService } from '../../../shared/src/services';
 
 @Module({
     imports: [
-        ConfigModule.forRoot({
-            load: [configuration],
-        }),
-        ClientsModule.registerAsync([
-            {
-                name: 'API_SERVICE',
-                useFactory: (configService: ConfigService) => ({
-                    transport: Transport.RMQ,
-                    options: {
-                        urls: [configService.get('rabbitmq.uri')],
-                        queue: 'api_queue',
-                    },
-                }),
-                inject: [ConfigService],
-            },
-        ]),
+        ConfigModule.forRoot(),
     ],
     controllers: [GatewayController],
+    providers: [
+        GatewayService,
+        RabbitMQService,
+        RedisService
+    ],
 })
-export class GatewayModule { }
+export class GatewayModule {
+    constructor(
+        private readonly rabbitMQService: RabbitMQService,
+        private readonly redisService: RedisService
+    ) {
+        // Initialize RabbitMQ
+        this.rabbitMQService.init().catch(err => {
+            console.error('Failed to initialize RabbitMQ:', err);
+            throw err;
+        });
+
+        // Redis client is automatically initialized in the RedisService constructor
+        // as seen in shared/src/services/redis.service.ts
+    }
+}
