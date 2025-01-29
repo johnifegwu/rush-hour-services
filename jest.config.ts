@@ -1,5 +1,5 @@
-import { getJestProjectsAsync } from '@nx/jest';
+import { getJestProjects } from '@nx/jest';
 
 export default async () => ({
-  projects: await getJestProjectsAsync(),
+  projects: getJestProjects(),
 });

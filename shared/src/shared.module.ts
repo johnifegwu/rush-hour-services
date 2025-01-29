@@ -1,12 +1,22 @@
-import { Module } from '@nestjs/common';
-import { CacheModule } from '@nestjs/cache-manager';
+import { Module, Global } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
+import { MongooseModule } from '@nestjs/mongoose';
+import { CacheModule } from '@nestjs/cache-manager';
 import { RedisClientOptions } from 'redis';
-import { GameService } from '../../../../shared/src/services/game.service';
-import { GameController } from './game.controller';
+import configuration from './config/configuration';
 
+@Global()
 @Module({
     imports: [
+        ConfigModule.forRoot({
+            isGlobal: true,
+            load: [configuration],
+        }),
+        MongooseModule.forRootAsync({
+            useFactory: async () => ({
+                uri: configuration().mongodb.uri,
+            }),
+        }),
         CacheModule.registerAsync<RedisClientOptions>({
             imports: [ConfigModule],
             useFactory: async (configService: ConfigService) => ({
@@ -18,7 +28,6 @@ import { GameController } from './game.controller';
             inject: [ConfigService],
         }),
     ],
-    providers: [GameService],
-    controllers: [GameController],
+    exports: [ConfigModule, CacheModule],
 })
-export class GameModule { }
+export class SharedModule { }

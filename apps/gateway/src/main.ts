@@ -1,16 +1,15 @@
 import { NestFactory } from '@nestjs/core';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
-import { AppModule } from './app.module';
+import { GatewayModule } from './gateway.module';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create(GatewayModule);
 
   const config = new DocumentBuilder()
-    .setTitle('Rush Hour Game API')
-    .setDescription('The Rush Hour Game API description')
+    .setTitle('Rush Hour API')
+    .setDescription('The Rush Hour puzzle game API')
     .setVersion('1.0')
     .build();
-
   const document = SwaggerModule.createDocument(app, config);
   SwaggerModule.setup('docs', app, document);
 

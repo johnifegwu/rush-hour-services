@@ -47,30 +47,60 @@ export class RushHourSolverService {
 
         for (const [carId, positions] of cars.entries()) {
             const isHorizontal = positions[0].row === positions[1].row;
-
-            if (isHorizontal) {
-                // Try moving left and right
-                if (this.canMove(board, positions[0].row, positions[0].col - 1)) {
-                    moves.push({ carId, direction: MovementDirection.Left });
-                }
-                if (this.canMove(board, positions[positions.length - 1].row,
-                    positions[positions.length - 1].col + 1)) {
-                    moves.push({ carId, direction: MovementDirection.Right });
-                }
-            } else {
-                // Try moving up and down
-                if (this.canMove(board, positions[0].row - 1, positions[0].col)) {
-                    moves.push({ carId, direction: MovementDirection.Up });
-                }
-                if (this.canMove(board, positions[positions.length - 1].row + 1,
-                    positions[positions.length - 1].col)) {
-                    moves.push({ carId, direction: MovementDirection.Down });
-                }
-            }
+            this.addValidMovesForCar(board, carId, positions, isHorizontal, moves);
         }
 
         return moves;
     }
+
+    private addValidMovesForCar(
+        board: number[][],
+        carId: number,
+        positions: Array<{ row: number, col: number }>,
+        isHorizontal: boolean,
+        moves: Step[]
+    ): void {
+        if (isHorizontal) {
+            this.addHorizontalMoves(board, carId, positions, moves);
+        } else {
+            this.addVerticalMoves(board, carId, positions, moves);
+        }
+    }
+
+    private addHorizontalMoves(
+        board: number[][],
+        carId: number,
+        positions: Array<{ row: number, col: number }>,
+        moves: Step[]
+    ): void {
+        // Check left movement
+        if (this.canMove(board, positions[0].row, positions[0].col - 1)) {
+            moves.push({ carId, direction: MovementDirection.Left });
+        }
+        // Check right movement
+        if (this.canMove(board, positions[positions.length - 1].row,
+            positions[positions.length - 1].col + 1)) {
+            moves.push({ carId, direction: MovementDirection.Right });
+        }
+    }
+
+    private addVerticalMoves(
+        board: number[][],
+        carId: number,
+        positions: Array<{ row: number, col: number }>,
+        moves: Step[]
+    ): void {
+        // Check upward movement
+        if (this.canMove(board, positions[0].row - 1, positions[0].col)) {
+            moves.push({ carId, direction: MovementDirection.Up });
+        }
+        // Check downward movement
+        if (this.canMove(board, positions[positions.length - 1].row + 1,
+            positions[positions.length - 1].col)) {
+            moves.push({ carId, direction: MovementDirection.Down });
+        }
+    }
+
 
     private findCars(board: number[][]): Map<number, Array<{ row: number, col: number }>> {
         const cars = new Map<number, Array<{ row: number, col: number }>>();

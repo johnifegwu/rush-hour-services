@@ -1,11 +1,12 @@
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
-import { Board } from '../../../../shared/src/schemas/board.schema';
-import { Game } from '../../../../shared/src/schemas/game.schema';
-import { MoveCarDto } from '../../../../shared/src/dto/move-car.dto';
+import { Board, Game } from '../schemas';
+import { MoveCarDto } from '../dto/move-car.dto';
+import { RedisService } from 'shared/src/services';
 import { BadRequestException, NotFoundException } from 'shared/src/exceptions';
 import { GameMove, MovementDirection, MoveQuality } from 'shared/src/interfaces/rush-hour.interface';
+import { CACHE_MANAGER } from '@nestjs/cache-manager';
 
 interface PriorityQueueNode {
     value: State;
@@ -90,8 +91,10 @@ export class GameService {
     private readonly MAX_SEARCH_STATES = 100000;
     private readonly PARALLEL_CHUNK_SIZE = 1000;
     constructor(
+        @Inject(CACHE_MANAGER) private readonly cacheManager: Cache,
         @InjectModel(Board.name) private readonly boardModel: Model<Board>,
         @InjectModel(Game.name) private readonly gameModel: Model<Game>,
+        private readonly redisService: RedisService,
     ) { }
 
     async createBoard(matrix: number[][]) {
@@ -143,8 +146,8 @@ export class GameService {
         }
 
         // Calculate move quality and minimum moves after this move
-        const moveQuality = await this.calculateMoveQuality(newState, game.minimumMovesRequired);
-        const minimumMovesAfter = await this.calculateMinimumMoves(newState);
+        const moveQuality = await this.calculateMoveQuality(newState, game.minimumMovesRequired, gameId);
+        const minimumMovesAfter = await this.calculateMinimumMoves(newState, gameId);
 
         // Create new game move
         const gameMove: GameMove = {
@@ -279,9 +282,10 @@ export class GameService {
 
     private async calculateMoveQuality(
         newState: number[][],
-        currentMinimumMoves: number
+        currentMinimumMoves: number,
+        gameid: string
     ): Promise<MoveQuality> {
-        const newMinimumMoves = await this.calculateMinimumMoves(newState);
+        const newMinimumMoves = await this.calculateMinimumMoves(newState, gameid);
 
         if (newMinimumMoves < currentMinimumMoves) {
             return MoveQuality.GOOD;
@@ -292,77 +296,92 @@ export class GameService {
         }
     }
 
-    private async calculateMinimumMoves(state: number[][]): Promise<number> {
+    private async calculateMinimumMoves(state: number[][], gameId: string): Promise<number> {
         // Validate board size
         if (state.length > this.MAX_BOARD_SIZE || state[0].length > this.MAX_BOARD_SIZE) {
             throw new BadRequestException('Board size exceeds maximum allowed dimensions');
         }
 
         const stateKey = this.getStateKey(state);
+        const redisKey = `${gameId}:${stateKey}`; // Combine gameId and stateKey
 
-        // Check cache first
-        if (this.stateCache.has(stateKey)) {
-            return this.stateCache.get(stateKey);
-        }
+        try {
 
-        const queue = new PriorityQueue();
-        const visited = new Set<string>();
-        const initialState: State = {
-            matrix: state,
-            moves: 0
-        };
+            // Check Redis cache first
+            const cachedValue = await this.redisService.get(redisKey);
+            if (cachedValue !== null) {
+                return cachedValue; // Return cached value if it exists
+            }
 
-        queue.enqueue(initialState, this.calculateEnhancedHeuristic(state));
-        visited.add(stateKey);
+            // Check cache first
+            // if (this.stateCache.has(stateKey)) { //replaced with Redis implementation.
+            //     return this.stateCache.get(stateKey);
+            // }
 
-        const processStateChunk = async (states: State[]): Promise<number | null> => {
-            for (const currentState of states) {
-                if (this.checkWinCondition(currentState.matrix)) {
-                    return currentState.moves;
-                }
+            const queue = new PriorityQueue();
+            const visited = new Set<string>();
+            const initialState: State = {
+                matrix: state,
+                moves: 0
+            };
 
-                const nextMoves = await this.generateNextMoves(currentState);
-                for (const nextState of nextMoves) {
-                    const nextStateKey = this.getStateKey(nextState.matrix);
-                    if (!visited.has(nextStateKey)) {
-                        visited.add(nextStateKey);
-                        const priority = nextState.moves +
-                            this.calculateEnhancedHeuristic(nextState.matrix);
-                        queue.enqueue(nextState, priority);
+            queue.enqueue(initialState, this.calculateEnhancedHeuristic(state));
+            visited.add(stateKey);
+
+            const processStateChunk = async (states: State[]): Promise<number | null> => {
+                for (const currentState of states) {
+                    if (this.checkWinCondition(currentState.matrix)) {
+                        return currentState.moves;
+                    }
+
+                    const nextMoves = await this.generateNextMoves(currentState);
+                    for (const nextState of nextMoves) {
+                        const nextStateKey = this.getStateKey(nextState.matrix);
+                        if (!visited.has(nextStateKey)) {
+                            visited.add(nextStateKey);
+                            const priority = nextState.moves +
+                                this.calculateEnhancedHeuristic(nextState.matrix);
+                            queue.enqueue(nextState, priority);
+                        }
                     }
                 }
-            }
-            return null;
-        };
+                return null;
+            };
 
-        while (queue.length > 0) {
-            if (visited.size > this.MAX_SEARCH_STATES) {
-                console.warn('Search space exceeded maximum allowed states');
-                return Infinity;
-            }
+            while (queue.length > 0) {
+                if (visited.size > this.MAX_SEARCH_STATES) {
+                    console.warn('Search space exceeded maximum allowed states');
+                    return Infinity;
+                }
 
-            // Process states in parallel chunks
-            const stateChunks: State[][] = [];
-            for (let i = 0; i < this.PARALLEL_CHUNK_SIZE && queue.length > 0; i++) {
-                const state = queue.dequeue();
-                if (state) {
-                    stateChunks.push([state]);
+                // Process states in parallel chunks
+                const stateChunks: State[][] = [];
+                for (let i = 0; i < this.PARALLEL_CHUNK_SIZE && queue.length > 0; i++) {
+                    const state = queue.dequeue();
+                    if (state) {
+                        stateChunks.push([state]);
+                    }
+                }
+
+                const results = await Promise.all(
+                    stateChunks.map(chunk => processStateChunk(chunk))
+                );
+
+                const solution = results.find(result => result !== null);
+                if (solution !== undefined && solution !== null) {
+                    // Cache the result
+                    this.redisService.set(redisKey, solution);
+                    return solution;
                 }
             }
 
-            const results = await Promise.all(
-                stateChunks.map(chunk => processStateChunk(chunk))
-            );
+            return Infinity;
 
-            const solution = results.find(result => result !== null);
-            if (solution !== undefined && solution !== null) {
-                // Cache the result
-                this.stateCache.set(stateKey, solution);
-                return solution;
-            }
+        } catch (error) {
+            // Handle Redis errors or other issues gracefully
+            console.error('Redis error:', error.message);
+            throw new Error('An error occurred while processing the game state');
         }
-
-        return Infinity;
     }
 
     private calculateEnhancedHeuristic(matrix: number[][]): number {

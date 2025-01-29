@@ -17,7 +17,7 @@ export interface Board {
 }
 
 export interface Game {
-    id: string;
+    id?: string;
     boardId: string;
     currentState: number[][];
     moves: GameMove[];

@@ -3,8 +3,7 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { MongooseModule } from '@nestjs/mongoose';
 import { ClientsModule, Transport } from '@nestjs/microservices';
 import { GameModule } from './game/game.module';
-import { Board } from '../../../shared/src/schemas/board.schema';
-import { Game } from '../../../shared/src/schemas/game.schema';
+import { Board, Game } from '../../../shared/src/schemas';
 
 @Module({
     imports: [
