@@ -49,6 +49,7 @@
     "@types/amqplib": "^0.10.6",
     "@types/compression": "^1.7.5",
     "@types/jest": "^29.5.14",
+    "@types/mongoose": "^5.11.96",
     "@types/node": "^18.16.9",
     "@typescript-eslint/eslint-plugin": "^6.15.0",
     "@typescript-eslint/parser": "^6.15.0",

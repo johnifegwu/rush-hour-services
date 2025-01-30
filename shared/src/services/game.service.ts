@@ -1,4 +1,4 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { Board, Game } from '../schemas';
@@ -7,7 +7,6 @@ import { RedisService } from './redis.service';
 import { RabbitMQService } from './rabbitmq.service';
 import { BadRequestException, NotFoundException } from '../exceptions';
 import { AnalysisResult, GameMove, MovementDirection, MoveQuality, Step } from '../interfaces/rush-hour.interface';
-import { CACHE_MANAGER } from '@nestjs/cache-manager';
 
 type Position = [number, number];
 
@@ -103,7 +102,6 @@ export class GameService {
     private readonly MAX_SEARCH_STATES = 100000;
     private readonly PARALLEL_CHUNK_SIZE = 1000;
     constructor(
-        @Inject(CACHE_MANAGER) private readonly cacheManager: Cache,
         @InjectModel(Board.name) private readonly boardModel: Model<Board>,
         @InjectModel(Game.name) private readonly gameModel: Model<Game>,
         private readonly redisService: RedisService,
@@ -111,25 +109,25 @@ export class GameService {
     ) { }
 
     async createBoard(matrix: number[][]) {
-        const board = new this.boardModel({ matrix });
-        return await board.save();
+        return await this.boardModel.create({ matrix });
     }
 
     async startGame(boardId: string) {
         const board = await this.boardModel.findById(boardId);
         if (!board) throw new Error('Board not found');
 
-        const game = new this.gameModel({
+        const game = await this.gameModel.create({
             boardId,
             currentState: board.matrix,
             moves: [],
             lastMoveAt: new Date(),
-            minimumMovesRequired: 0,
+            isSolved: false
         });
 
-        await game.save();
         //Save to redis
         this.redisService.setGame(game.id, game);
+
+        return game;
     }
 
     async getGame(gameId: string): Promise<Game> {
@@ -732,7 +730,7 @@ export class GameService {
             // Check Redis cache first
             const cachedValue = await this.redisService.get(redisKey);
             if (cachedValue !== null) {
-                return cachedValue; // Return cached value if it exists
+                return Number(cachedValue);
             }
 
             const queue = new PriorityQueue();

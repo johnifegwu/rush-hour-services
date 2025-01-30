@@ -3,9 +3,13 @@ import { connect, Connection, Channel } from 'amqplib';
 
 @Injectable()
 export class RabbitMQService {
-    private connection: Connection;
-    private channel: Channel;
-    private port = process.env.RABBITMQ_PORT || 5672;
+    private connection!: Connection;
+    private channel!: Channel;
+    private port = process.env['RABBITMQ_PORT'] || 5672;
+
+    async onModuleInit() {
+        await this.init();
+    }
 
     async init() {
         this.connection = await connect(`amqp://rabbitmq:${this.port}`);
