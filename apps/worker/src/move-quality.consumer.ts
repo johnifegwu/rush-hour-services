@@ -1,9 +1,9 @@
 import { Injectable, OnModuleInit, OnModuleDestroy, Logger } from '@nestjs/common';
 import { connect, Connection, Channel, ConsumeMessage } from 'amqplib';
-import { GameService } from 'shared/src/services';
+import { GameService } from '../../../shared/src/services';
 import { ConfigService } from '@nestjs/config';
-import { exponentialBackoff } from 'shared/src/utils/retry';
-import { MoveCarDto } from 'shared/src/dto/move-car.dto';
+import { exponentialBackoff } from '../../../shared/src/utils/retry';
+import { MoveCarDto } from '../../../shared/src/dto/move-car.dto';
 
 interface MoveQualityMessage {
     gameId: string;
