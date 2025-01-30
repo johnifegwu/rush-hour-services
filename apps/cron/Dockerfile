@@ -3,10 +3,12 @@ FROM node:18-alpine AS builder
 
 WORKDIR /app
 
-# Copy package files
+# Copy all configuration files
 COPY package*.json ./
 COPY nx.json ./
 COPY tsconfig*.json ./
+COPY jest.preset.js ./
+COPY jest.config.ts ./
 
 # Copy project files
 COPY apps/cron ./apps/cron
@@ -15,8 +17,8 @@ COPY shared/src ./shared/src
 # Install dependencies
 RUN npm ci
 
-# Build the application
-RUN npm run nx build cron
+# Build the application (Changed this line)
+RUN npx nx build cron
 
 # Production stage
 FROM node:18-alpine

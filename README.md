@@ -1,5 +1,19 @@
 # RushHourServices
 
+Do the following to run the microservices
+```
+npm install
+npx nx test shared --testFile=game.service.spec.ts
+npx nx test cron --test-file=apps/cron/src/cleanup/cleanup.service.spec.ts
+npx nx test worker --test-file=apps/worker/src/move-analysis.consumer.spec.ts
+npx nx test worker --test-file=apps/worker/src/move-quality.consumer.spec.ts
+docker-compose build gateway
+docker-compose build api
+docker-compose build worker
+docker-compose build cron
+```
+http://localhost:3001/docs
+
 <a alt="Nx logo" href="https://nx.dev" target="_blank" rel="noreferrer"><img src="https://raw.githubusercontent.com/nrwl/nx/master/images/nx-logo.png" width="45"></a>
 
 ✨ Your new, shiny [Nx workspace](https://nx.dev) is almost ready ✨.

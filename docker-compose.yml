@@ -49,13 +49,19 @@ services:
   gateway:
     build:
       context: .
-      dockerfile: apps/gateway/Dockerfile
+      dockerfile: ${DOCKERFILE:-apps/gateway/Dockerfile}
+      args:
+        - NODE_ENV=production
+    container_name: gateway
     restart: always
+    ports:
+      - "3000:3000"
     depends_on:
       - mongodb
       - redis
       - rabbitmq
     environment:
+      - PORT=3000
       - MONGO_URI=mongodb://${MONGO_USERNAME}:${MONGO_PASSWORD}@mongodb:${MONGOBD_PORT}
       - REDIS_URI=redis://redis:${REDIS_PORT}
       - RABBITMQ_URI=amqp://${RABBITMQ_USER}:${RABBITMQ_PASSWORD}@rabbitmq:${RABBITMQ_PORT}
@@ -63,13 +69,19 @@ services:
   api:
     build:
       context: .
-      dockerfile: apps/api/Dockerfile
+      dockerfile: ${DOCKERFILE:-apps/api/Dockerfile}
+      args:
+        - NODE_ENV=production
+    container_name: api
     restart: always
+    ports:
+      - "3001:3001"
     depends_on:
       - mongodb
       - redis
       - rabbitmq
     environment:
+      - PORT=3000
       - MONGO_URI=mongodb://${MONGO_USERNAME}:${MONGO_PASSWORD}@mongodb:${MONGOBD_PORT}
       - REDIS_URI=redis://redis:${REDIS_PORT}
       - RABBITMQ_URI=amqp://${RABBITMQ_USER}:${RABBITMQ_PASSWORD}@rabbitmq:${RABBITMQ_PORT}
@@ -77,13 +89,19 @@ services:
   worker:
     build:
       context: .
-      dockerfile: apps/worker/Dockerfile
+      dockerfile: ${DOCKERFILE:-apps/worker/Dockerfile}
+      args:
+        - NODE_ENV=production
+    container_name: worker
     restart: always
+    ports:
+      - "3005:3005"
     depends_on:
       - mongodb
       - redis
       - rabbitmq
     environment:
+      - PORT=3005
       - MONGO_URI=mongodb://${MONGO_USERNAME}:${MONGO_PASSWORD}@mongodb:${MONGOBD_PORT}
       - REDIS_URI=redis://redis:${REDIS_PORT}
       - RABBITMQ_URI=amqp://${RABBITMQ_USER}:${RABBITMQ_PASSWORD}@rabbitmq:${RABBITMQ_PORT}
@@ -91,13 +109,19 @@ services:
   cron:
     build:
       context: .
-      dockerfile: apps/cron/Dockerfile
+      dockerfile: ${DOCKERFILE:-apps/cron/Dockerfile}
+      args:
+        - NODE_ENV=production
+    container_name: cron
     restart: always
+    ports:
+      - "3002:3002"
     depends_on:
       - mongodb
       - redis
       - rabbitmq
     environment:
+      - PORT=3002
       - MONGO_URI=mongodb://${MONGO_USERNAME}:${MONGO_PASSWORD}@mongodb:${MONGOBD_PORT}
       - REDIS_URI=redis://redis:${REDIS_PORT}
       - RABBITMQ_URI=amqp://${RABBITMQ_USER}:${RABBITMQ_PASSWORD}@rabbitmq:${RABBITMQ_PORT}

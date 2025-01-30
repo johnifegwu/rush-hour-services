@@ -3,10 +3,12 @@ FROM node:18-alpine AS builder
 
 WORKDIR /app
 
-# Copy package files
+# Copy all configuration files
 COPY package*.json ./
 COPY nx.json ./
 COPY tsconfig*.json ./
+COPY jest.preset.js ./
+COPY jest.config.ts ./
 
 # Copy project files
 COPY apps/api ./apps/api
@@ -15,8 +17,8 @@ COPY shared ./shared
 # Install dependencies
 RUN npm ci
 
-# Build the application
-RUN npm run nx build api
+# Build the application (Changed this line)
+RUN npx nx build api
 
 # Production stage
 FROM node:18-alpine
@@ -25,6 +27,7 @@ WORKDIR /app
 
 # Copy built assets from builder
 COPY --from=builder /app/dist/apps/api ./
+COPY --from=builder /app/package*.json ./
 
 # Install production dependencies only
 RUN npm ci --only=production
