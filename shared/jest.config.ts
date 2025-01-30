@@ -1,6 +1,6 @@
 export default {
   displayName: 'shared',
-  preset: '../jest.preset.js',
+  preset: './jest.config.ts',
   testEnvironment: 'node',
   transform: {
     '^.+\\.[tj]s$': ['ts-jest', { tsconfig: '<rootDir>/tsconfig.spec.json' }],

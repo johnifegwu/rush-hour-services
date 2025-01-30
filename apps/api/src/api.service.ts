@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { GameService } from '../../../shared/src/services';
+import { GameService } from 'shared/src/services';
 import { CreateBoardDto, MoveCarDto } from 'shared/src/dto';
 
 @Injectable()
@@ -8,6 +8,10 @@ export class ApiService {
 
     async moveCar(gameId: string, moveCarDto: MoveCarDto) {
         return this.gameService.moveCar(gameId, moveCarDto);
+    }
+
+    async getMoveCar(gameId: string) {
+        return this.gameService.getMoveCarResult(gameId);
     }
 
     async createBoard(createBoardDto: CreateBoardDto) {
@@ -36,6 +40,10 @@ export class ApiService {
 
     async getSolution(gameId: string) {
         return this.gameService.getSolution(gameId);
+    }
+
+    async createAnalysis(gameId: string) {
+        return this.gameService.createAnalysis(gameId);
     }
 
     async getAnalysis(gameId: string) {

@@ -1,7 +1,8 @@
 import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
 import { CleanupService } from './cleanup.service';
-import { Game, GameSchema } from '../../../../shared/src/schemas/game.schema';
+import { RedisService } from 'shared/src/services/redis.service';
+import { Game, GameSchema } from 'shared/src/schemas/game.schema';
 
 @Module({
     imports: [
@@ -9,6 +10,6 @@ import { Game, GameSchema } from '../../../../shared/src/schemas/game.schema';
             { name: Game.name, schema: GameSchema }
         ]),
     ],
-    providers: [CleanupService],
+    providers: [CleanupService, RedisService],
 })
 export class CleanupModule { }

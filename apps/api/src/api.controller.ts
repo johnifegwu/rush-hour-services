@@ -1,37 +1,14 @@
 import {
-    Controller, Get, Post, Body, Param, HttpException, HttpStatus, HttpCode, NotFoundException,
+    Controller, Get, Post, Body, Param, HttpException, HttpStatus, HttpCode,
     Query,
+    Put,
 } from '@nestjs/common';
-import { MessagePattern } from '@nestjs/microservices';
 import { ApiService } from './api.service';
-import { CreateBoardDto, MoveCarDto } from '../../../shared/src/dto';
+import { CreateBoardDto, MoveCarDto } from 'shared/src/dto';
 
 @Controller()
 export class ApiController {
     constructor(private readonly apiService: ApiService) { }
-
-    @MessagePattern({ cmd: 'create_board' })
-    async createBoard(data: CreateBoardDto) {
-        return this.apiService.createBoard(data);
-    }
-
-    @MessagePattern({ cmd: 'start_game' })
-    async startGame(data: { boardId: string }) {
-        return this.apiService.startGame(data.boardId);
-    }
-
-    @MessagePattern({ cmd: 'get_game' })
-    async getGame(data: { gameId: string }) {
-        return this.apiService.getGame(data.gameId);
-    }
-
-    @MessagePattern({ cmd: 'move_car' })
-    async moveCar(data: { gameId: string } & MoveCarDto) {
-        return this.apiService.moveCar(data.gameId, {
-            carId: data.carId,
-            direction: data.direction,
-        });
-    }
 
     @Post('create-board')
     @HttpCode(HttpStatus.CREATED)
@@ -74,7 +51,7 @@ export class ApiController {
         }
     }
 
-    @Post(':gameId/move')
+    @Put(':gameId/move')
     async moveCarEndPoint(
         @Param('gameId') gameId: string,
         @Body() moveCarDto: MoveCarDto
@@ -88,6 +65,18 @@ export class ApiController {
             throw new HttpException(
                 'Invalid move',
                 HttpStatus.BAD_REQUEST
+            );
+        }
+    }
+
+    @Get(':gameId/move')
+    async getValidMovesEndPoint(@Param('gameId') gameId: string) {
+        try {
+            return await this.apiService.getGame(gameId);
+        } catch (error) {
+            throw new HttpException(
+                'Move not found',
+                HttpStatus.NOT_FOUND
             );
         }
     }
@@ -110,6 +99,11 @@ export class ApiController {
     @Get(':gameId/solution')
     async getSolutionEndPoint(@Param('gameId') gameId: string) {
         return this.apiService.getSolution(gameId);
+    }
+
+    @Put(':gameId/create-analysis')
+    async CreateAnalysisEndPoint(@Param('gameId') gameId: string) {
+        return this.apiService.createAnalysis(gameId);
     }
 
     @Get(':gameId/analysis')

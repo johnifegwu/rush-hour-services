@@ -3,6 +3,37 @@ import { connect, Connection, Channel } from 'amqplib';
 
 @Injectable()
 export class RabbitMQService {
+    private connection: Connection;
+    private channel: Channel;
+    private port = process.env.RABBITMQ_PORT || 5672;
+
+    async init() {
+        this.connection = await connect(`amqp://rabbitmq:${this.port}`);
+        this.channel = await this.connection.createChannel();
+        await this.channel.assertQueue('move_quality_queue', { durable: false });
+        await this.channel.assertQueue('move-analysis', { durable: true });
+    }
+
+    async publishMoveEvent(moveData: any) {
+        if (!this.channel) {
+            await this.init();
+        }
+        this.channel.sendToQueue(
+            'move_quality_queue',
+            Buffer.from(JSON.stringify(moveData))
+        );
+    }
+
+    async publishMoveAnalysis(gameId: string, board: number[][], move: any) {
+        if (!this.channel) {
+            await this.init();
+        }
+        this.channel.sendToQueue(
+            'move-analysis',
+            Buffer.from(JSON.stringify({ gameId, board, move }))
+        );
+    }
+
     async sendToQueue<T>(queueName: string, data: T): Promise<boolean> {
         await this.channel.assertQueue(queueName, { durable: true });
         return this.channel.sendToQueue(
@@ -39,22 +70,5 @@ export class RabbitMQService {
                 }
             }
         });
-    }
-
-
-    private connection: Connection;
-    private channel: Channel;
-
-    async init() {
-        this.connection = await connect('amqp://rabbitmq:5672');
-        this.channel = await this.connection.createChannel();
-        await this.channel.assertQueue('move-analysis', { durable: true });
-    }
-
-    async publishMoveAnalysis(gameId: string, board: number[][], move: any) {
-        await this.channel.sendToQueue(
-            'move-analysis',
-            Buffer.from(JSON.stringify({ gameId, board, move }))
-        );
     }
 }

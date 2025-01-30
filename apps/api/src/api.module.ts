@@ -1,8 +1,10 @@
 import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
 import { CacheModule } from '@nestjs/cache-manager';
-import { GameService } from '../../../shared/src/services';
-import { Board, BoardSchema, Game, GameSchema } from '../../../shared/src/schemas';
+import { ApiController } from './api.controller';
+import { ApiService } from './api.service';
+import { GameService } from 'shared/src/services';
+import { Board, BoardSchema, Game, GameSchema } from 'shared/src/schemas';
 
 @Module({
     imports: [
@@ -15,7 +17,7 @@ import { Board, BoardSchema, Game, GameSchema } from '../../../shared/src/schema
             max: 10000 // maximum number of items in cache
         }),
     ],
-    providers: [GameService],
-    exports: [GameService],
+    controllers: [ApiController],
+    providers: [ApiService, GameService],
 })
 export class ApiModule { }

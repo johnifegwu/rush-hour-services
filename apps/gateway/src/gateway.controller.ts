@@ -2,214 +2,227 @@ import {
     Controller,
     Get,
     Post,
-    Put,
-    Delete,
     Body,
     Param,
-    Query,
-    UseGuards,
-    UseInterceptors,
+    HttpException,
     HttpStatus,
-    ValidationPipe,
+    HttpCode,
+    Query,
+    Put,
+    UseGuards,
+    Logger,
 } from '@nestjs/common';
-import {
-    ApiTags,
-    ApiOperation,
-    ApiResponse,
-    ApiParam,
-    ApiQuery //    ApiBearerAuth,
-} from '@nestjs/swagger';
 import { GatewayService } from './gateway.service';
 import { CreateBoardDto, MoveCarDto } from '../../../shared/src/dto';
-import { LoggingInterceptor } from './interceptors/logging.interceptor';
 import { RateLimitGuard } from './guards/rate-limit.guard';
-import { GameResponse, BoardResponse } from './interfaces/responses.interface';
-import { ApiResponseInterceptor } from './interceptors/api-response.interceptor';
+import { AuthGuard } from './guards/auth.guard';
 
-@ApiTags('Rush Hour Game')
-@Controller('v1')
-@UseInterceptors(LoggingInterceptor, ApiResponseInterceptor)
+@Controller('game')
+@UseGuards(RateLimitGuard)
 export class GatewayController {
+    private readonly logger = new Logger(GatewayController.name);
+
     constructor(private readonly gatewayService: GatewayService) { }
 
-    @Post('boards')
-    @UseGuards(RateLimitGuard)
-    @ApiOperation({ summary: 'Create a new game board' })
-    @ApiResponse({
-        status: HttpStatus.CREATED,
-        description: 'Board created successfully',
-        type: BoardResponse,
-    })
-    @ApiResponse({
-        status: HttpStatus.BAD_REQUEST,
-        description: 'Invalid board configuration',
-    })
-    async createBoard(
-        @Body(new ValidationPipe({ transform: true })) createBoardDto: CreateBoardDto
+    @Post('create-board')
+    @HttpCode(HttpStatus.CREATED)
+    async createBoard(@Body() createBoardDto: CreateBoardDto) {
+        try {
+            const result = await this.gatewayService.createBoard(createBoardDto);
+            this.logger.log(`Board created successfully`);
+            return result;
+        } catch (error) {
+            this.logger.error(`Failed to create board: ${error.message}`);
+            throw new HttpException(
+                'Failed to create board',
+                HttpStatus.BAD_REQUEST
+            );
+        }
+    }
+
+    @Post('start-game')
+    @HttpCode(HttpStatus.CREATED)
+    async startGame(@Body() data: { boardId: string }) {
+        try {
+            const result = await this.gatewayService.startGame(data.boardId);
+            this.logger.log(`Game started with board ID: ${data.boardId}`);
+            return result;
+        } catch (error) {
+            this.logger.error(`Failed to start game: ${error.message}`);
+            throw new HttpException(
+                'Failed to start game',
+                HttpStatus.BAD_REQUEST
+            );
+        }
+    }
+
+    @Get(':gameId')
+    async getGame(@Param('gameId') gameId: string) {
+        try {
+            const game = await this.gatewayService.getGame(gameId);
+            this.logger.log(`Retrieved game: ${gameId}`);
+            return game;
+        } catch (error) {
+            this.logger.error(`Failed to get game ${gameId}: ${error.message}`);
+            throw new HttpException(
+                'Game not found',
+                HttpStatus.NOT_FOUND
+            );
+        }
+    }
+
+    @Put(':gameId/move')
+    async moveCar(
+        @Param('gameId') gameId: string,
+        @Body() moveCarDto: MoveCarDto
     ) {
-        return this.gatewayService.createBoard(createBoardDto);
+        try {
+            const result = await this.gatewayService.moveCar(gameId, moveCarDto);
+            this.logger.log(`Car moved in game ${gameId}`);
+            return result;
+        } catch (error) {
+            this.logger.error(`Invalid move in game ${gameId}: ${error.message}`);
+            throw new HttpException(
+                'Invalid move',
+                HttpStatus.BAD_REQUEST
+            );
+        }
+    }
+
+    @Get(':gameId/move')
+    async getValidMoves(@Param('gameId') gameId: string) {
+        try {
+            const moves = await this.gatewayService.getValidMoves(gameId);
+            this.logger.log(`Retrieved valid moves for game ${gameId}`);
+            return moves;
+        } catch (error) {
+            this.logger.error(`Failed to get moves for game ${gameId}: ${error.message}`);
+            throw new HttpException(
+                'Move not found',
+                HttpStatus.NOT_FOUND
+            );
+        }
     }
 
     @Get('boards')
-    @ApiOperation({ summary: 'Get all available boards' })
-    @ApiQuery({
-        name: 'difficulty',
-        required: false,
-        enum: ['easy', 'medium', 'hard'],
-    })
-    @ApiResponse({
-        status: HttpStatus.OK,
-        description: 'List of available boards',
-        type: [BoardResponse],
-    })
     async getBoards(@Query('difficulty') difficulty?: string) {
-        return this.gatewayService.getBoards(difficulty);
+        try {
+            const boards = await this.gatewayService.getBoards(difficulty);
+            this.logger.log(`Retrieved boards with difficulty: ${difficulty || 'all'}`);
+            return boards;
+        } catch (error) {
+            this.logger.error(`Failed to get boards: ${error.message}`);
+            throw new HttpException(
+                'Failed to retrieve boards',
+                HttpStatus.INTERNAL_SERVER_ERROR
+            );
+        }
     }
 
     @Get('boards/:boardId')
-    @ApiOperation({ summary: 'Get board by ID' })
-    @ApiParam({ name: 'boardId', description: 'Board ID' })
-    @ApiResponse({
-        status: HttpStatus.OK,
-        description: 'Board details',
-        type: BoardResponse,
-    })
-    @ApiResponse({
-        status: HttpStatus.NOT_FOUND,
-        description: 'Board not found',
-    })
     async getBoard(@Param('boardId') boardId: string) {
-        return this.gatewayService.getBoard(boardId);
+        try {
+            const board = await this.gatewayService.getBoard(boardId);
+            this.logger.log(`Retrieved board: ${boardId}`);
+            return board;
+        } catch (error) {
+            this.logger.error(`Failed to get board ${boardId}: ${error.message}`);
+            throw new HttpException(
+                'Board not found',
+                HttpStatus.NOT_FOUND
+            );
+        }
     }
 
-    @Post('games')
-    @UseGuards(RateLimitGuard)
-    @ApiOperation({ summary: 'Start a new game' })
-    @ApiResponse({
-        status: HttpStatus.CREATED,
-        description: 'Game started successfully',
-        type: GameResponse,
-    })
-    @ApiResponse({
-        status: HttpStatus.BAD_REQUEST,
-        description: 'Invalid board ID',
-    })
-    async startGame(@Body('boardId') boardId: string) {
-        return this.gatewayService.startGame(boardId);
-    }
-
-    @Get('games/:gameId')
-    @ApiOperation({ summary: 'Get game status' })
-    @ApiParam({ name: 'gameId', description: 'Game ID' })
-    @ApiResponse({
-        status: HttpStatus.OK,
-        description: 'Game details',
-        type: GameResponse,
-    })
-    @ApiResponse({
-        status: HttpStatus.NOT_FOUND,
-        description: 'Game not found',
-    })
-    async getGame(@Param('gameId') gameId: string) {
-        return this.gatewayService.getGame(gameId);
-    }
-
-    @Put('games/:gameId/move')
-    @UseGuards(RateLimitGuard)
-    @ApiOperation({ summary: 'Make a move in the game' })
-    @ApiParam({ name: 'gameId', description: 'Game ID' })
-    @ApiResponse({
-        status: HttpStatus.OK,
-        description: 'Move executed successfully',
-        type: GameResponse,
-    })
-    @ApiResponse({
-        status: HttpStatus.BAD_REQUEST,
-        description: 'Invalid move',
-    })
-    @ApiResponse({
-        status: HttpStatus.NOT_FOUND,
-        description: 'Game not found',
-    })
-    async moveCar(
-        @Param('gameId') gameId: string,
-        @Body(new ValidationPipe({ transform: true })) moveCarDto: MoveCarDto
-    ) {
-        return this.gatewayService.moveCar(gameId, moveCarDto);
-    }
-
-    @Get('games/:gameId/hint')
-    @ApiOperation({ summary: 'Get hint for next move' })
-    @ApiParam({ name: 'gameId', description: 'Game ID' })
-    @ApiResponse({
-        status: HttpStatus.OK,
-        description: 'Hint provided successfully',
-    })
-    @ApiResponse({
-        status: HttpStatus.NOT_FOUND,
-        description: 'Game not found',
-    })
+    @Get(':gameId/hint')
+    @UseGuards(AuthGuard) // Optional: Add auth guard for premium features
     async getHint(@Param('gameId') gameId: string) {
-        return this.gatewayService.getHint(gameId);
+        try {
+            const hint = await this.gatewayService.getHint(gameId);
+            this.logger.log(`Hint provided for game ${gameId}`);
+            return hint;
+        } catch (error) {
+            this.logger.error(`Failed to get hint for game ${gameId}: ${error.message}`);
+            throw new HttpException(
+                'Failed to get hint',
+                HttpStatus.BAD_REQUEST
+            );
+        }
     }
 
-    @Get('games/:gameId/solution')
-    @ApiOperation({ summary: 'Get optimal solution for the game' })
-    @ApiParam({ name: 'gameId', description: 'Game ID' })
-    @ApiResponse({
-        status: HttpStatus.OK,
-        description: 'Solution provided successfully',
-    })
-    @ApiResponse({
-        status: HttpStatus.NOT_FOUND,
-        description: 'Game not found',
-    })
+    @Get(':gameId/solution')
+    @UseGuards(AuthGuard) // Optional: Add auth guard for premium features
     async getSolution(@Param('gameId') gameId: string) {
-        return this.gatewayService.getSolution(gameId);
+        try {
+            const solution = await this.gatewayService.getSolution(gameId);
+            this.logger.log(`Solution provided for game ${gameId}`);
+            return solution;
+        } catch (error) {
+            this.logger.error(`Failed to get solution for game ${gameId}: ${error.message}`);
+            throw new HttpException(
+                'Failed to get solution',
+                HttpStatus.BAD_REQUEST
+            );
+        }
     }
 
-    @Get('games/:gameId/analysis')
-    @ApiOperation({ summary: 'Get game analysis' })
-    @ApiParam({ name: 'gameId', description: 'Game ID' })
-    @ApiResponse({
-        status: HttpStatus.OK,
-        description: 'Game analysis provided successfully',
-    })
-    @ApiResponse({
-        status: HttpStatus.NOT_FOUND,
-        description: 'Game not found',
-    })
+    @Put(':gameId/create-analysis')
+    async createAnalysis(@Param('gameId') gameId: string) {
+        try {
+            const analysis = await this.gatewayService.createAnalysis(gameId);
+            this.logger.log(`Analysis created for game ${gameId}`);
+            return analysis;
+        } catch (error) {
+            this.logger.error(`Failed to create analysis for game ${gameId}: ${error.message}`);
+            throw new HttpException(
+                'Failed to create analysis',
+                HttpStatus.BAD_REQUEST
+            );
+        }
+    }
+
+    @Get(':gameId/analysis')
     async getAnalysis(@Param('gameId') gameId: string) {
-        return this.gatewayService.getAnalysis(gameId);
+        try {
+            const analysis = await this.gatewayService.getAnalysis(gameId);
+            this.logger.log(`Retrieved analysis for game ${gameId}`);
+            return analysis;
+        } catch (error) {
+            this.logger.error(`Failed to get analysis for game ${gameId}: ${error.message}`);
+            throw new HttpException(
+                'Analysis not found',
+                HttpStatus.NOT_FOUND
+            );
+        }
     }
 
-    @Delete('games/:gameId')
-    @ApiOperation({ summary: 'Abandon game' })
-    @ApiParam({ name: 'gameId', description: 'Game ID' })
-    @ApiResponse({
-        status: HttpStatus.OK,
-        description: 'Game abandoned successfully',
-    })
-    @ApiResponse({
-        status: HttpStatus.NOT_FOUND,
-        description: 'Game not found',
-    })
+    @Post(':gameId/abandon')
     async abandonGame(@Param('gameId') gameId: string) {
-        return this.gatewayService.abandonGame(gameId);
+        try {
+            const result = await this.gatewayService.abandonGame(gameId);
+            this.logger.log(`Game ${gameId} abandoned`);
+            return result;
+        } catch (error) {
+            this.logger.error(`Failed to abandon game ${gameId}: ${error.message}`);
+            throw new HttpException(
+                'Failed to abandon game',
+                HttpStatus.BAD_REQUEST
+            );
+        }
     }
 
     @Get('leaderboard')
-    @ApiOperation({ summary: 'Get game leaderboard' })
-    @ApiQuery({
-        name: 'timeFrame',
-        required: false,
-        enum: ['daily', 'weekly', 'monthly', 'allTime'],
-    })
-    @ApiResponse({
-        status: HttpStatus.OK,
-        description: 'Leaderboard retrieved successfully',
-    })
-    async getLeaderboard(@Query('timeFrame') timeFrame: string = 'allTime') {
-        return this.gatewayService.getLeaderboard(timeFrame);
+    async getLeaderboard(@Query('timeFrame') timeFrame: string) {
+        try {
+            const leaderboard = await this.gatewayService.getLeaderboard(timeFrame);
+            this.logger.log(`Retrieved leaderboard for timeframe: ${timeFrame}`);
+            return leaderboard;
+        } catch (error) {
+            this.logger.error(`Failed to get leaderboard: ${error.message}`);
+            throw new HttpException(
+                'Failed to retrieve leaderboard',
+                HttpStatus.INTERNAL_SERVER_ERROR
+            );
+        }
     }
 }

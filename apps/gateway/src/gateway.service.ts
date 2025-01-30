@@ -1,58 +1,106 @@
-import { Injectable, Inject } from '@nestjs/common';
-import { ClientProxy } from '@nestjs/microservices';
+import { Injectable } from '@nestjs/common';
+import { HttpService } from '@nestjs/axios';
 import { CreateBoardDto, MoveCarDto } from '../../../shared/src/dto';
 import { firstValueFrom } from 'rxjs';
 
 @Injectable()
 export class GatewayService {
+    constructor(private readonly httpService: HttpService) { }
 
-    constructor(
-        @Inject('API_SERVICE') private readonly apiClient: ClientProxy,
-    ) { }
-
-    getBoards(difficulty: string | undefined) {
-        throw new Error('Method not implemented.');
-    }
-    getBoard(boardId: string) {
-        throw new Error('Method not implemented.');
-    }
-    getHint(gameId: string) {
-        throw new Error('Method not implemented.');
-    }
-    getSolution(gameId: string) {
-        throw new Error('Method not implemented.');
-    }
-    getAnalysis(gameId: string) {
-        throw new Error('Method not implemented.');
-    }
-    abandonGame(gameId: string) {
-        throw new Error('Method not implemented.');
-    }
-    getLeaderboard(timeFrame: string) {
-        throw new Error('Method not implemented.');
-    }
+    private readonly API_URL = process.env.API_URL || 'http://localhost:3001';
 
     async createBoard(createBoardDto: CreateBoardDto) {
-        return firstValueFrom(
-            this.apiClient.send({ cmd: 'create_board' }, createBoardDto)
+        const { data } = await firstValueFrom(
+            this.httpService.post(`${this.API_URL}/create-board`, createBoardDto)
         );
+        return data;
     }
 
     async startGame(boardId: string) {
-        return firstValueFrom(
-            this.apiClient.send({ cmd: 'start_game' }, { boardId })
+        const { data } = await firstValueFrom(
+            this.httpService.post(`${this.API_URL}/start-game`, { boardId })
         );
+        return data;
     }
 
     async getGame(gameId: string) {
-        return firstValueFrom(
-            this.apiClient.send({ cmd: 'get_game' }, { gameId })
+        const { data } = await firstValueFrom(
+            this.httpService.get(`${this.API_URL}/${gameId}`)
         );
+        return data;
     }
 
     async moveCar(gameId: string, moveCarDto: MoveCarDto) {
-        return firstValueFrom(
-            this.apiClient.send({ cmd: 'move_car' }, { gameId, ...moveCarDto })
+        const { data } = await firstValueFrom(
+            this.httpService.put(`${this.API_URL}/${gameId}/move`, moveCarDto)
         );
+        return data;
+    }
+
+    async getValidMoves(gameId: string) {
+        const { data } = await firstValueFrom(
+            this.httpService.get(`${this.API_URL}/${gameId}/move`)
+        );
+        return data;
+    }
+
+    async getBoards(difficulty?: string) {
+        const { data } = await firstValueFrom(
+            this.httpService.get(`${this.API_URL}/boards`, {
+                params: { difficulty }
+            })
+        );
+        return data;
+    }
+
+    async getBoard(boardId: string) {
+        const { data } = await firstValueFrom(
+            this.httpService.get(`${this.API_URL}/boards/${boardId}`)
+        );
+        return data;
+    }
+
+    async getHint(gameId: string) {
+        const { data } = await firstValueFrom(
+            this.httpService.get(`${this.API_URL}/${gameId}/hint`)
+        );
+        return data;
+    }
+
+    async getSolution(gameId: string) {
+        const { data } = await firstValueFrom(
+            this.httpService.get(`${this.API_URL}/${gameId}/solution`)
+        );
+        return data;
+    }
+
+    async createAnalysis(gameId: string) {
+        const { data } = await firstValueFrom(
+            this.httpService.put(`${this.API_URL}/${gameId}/create-analysis`, {})
+        );
+        return data;
+    }
+
+    async getAnalysis(gameId: string) {
+        const { data } = await firstValueFrom(
+            this.httpService.get(`${this.API_URL}/${gameId}/analysis`)
+        );
+        return data;
+    }
+
+    async abandonGame(gameId: string) {
+        const { data } = await firstValueFrom(
+            this.httpService.post(`${this.API_URL}/${gameId}/abandon`, {})
+        );
+        return data;
+    }
+
+    async getLeaderboard(timeFrame: string) {
+        const { data } = await firstValueFrom(
+            this.httpService.get(`${this.API_URL}/leaderboard`, {
+                params: { timeFrame }
+            })
+        );
+        return data;
     }
 }

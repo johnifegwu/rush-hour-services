@@ -43,7 +43,7 @@ export class RateLimitGuard implements CanActivate {
                     error: 'Too many requests',
                     message: 'Please try again later',
                 },
-                HttpStatus.TOO_MANY_REQUESTS,
+                HttpStatus.TOO_MANY_REQUESTS
             );
         }
 

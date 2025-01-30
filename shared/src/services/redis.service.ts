@@ -1,111 +1,128 @@
 import { Injectable } from '@nestjs/common';
-import { createClient, RedisClientType } from 'redis';
-import { Game, AnalysisResult } from '../interfaces/rush-hour.interface';
+import { createClient } from 'redis';
+import type { RedisClientType } from 'redis';
+import { Game } from '../schemas/game.schema';
+import { AnalysisResult } from '../interfaces/rush-hour.interface';
 
 @Injectable()
 export class RedisService {
-    private client;
+    private client: RedisClientType;
 
     constructor() {
         this.client = createClient({
-            url: 'redis://redis:6379'
+            url: process.env['REDIS_URI'] || `redis://localhost:${process.env['REDIS_PORT'] || 6379}`
         });
-        this.client.connect();
+
+        this.client.connect().catch(err => {
+            console.error('Redis connection error:', err);
+        });
+
+        this.client.on('error', (err) => {
+            console.error('Redis client error:', err);
+        });
     }
 
-    // Add this getter method
     getClient(): RedisClientType {
+        if (!this.client.isOpen) {
+            this.client.connect().catch(err => {
+                console.error('Redis reconnection error:', err);
+            });
+        }
         return this.client;
     }
 
     async setGame(gameId: string, game: Game): Promise<void> {
-        await this.client.set(
-            `game:${gameId}`,
-            JSON.stringify(game),
-            { EX: 2400 } // 40 minutes expiration : will kick-in if cron jobs failed for any reason.
-        );
-    }
-
-    async set(key: string, value: number): Promise<void> {
-        await this.client.set(`state:${key}`, value, { EX: 2400 });// 40 minutes expiration 
-    }
-
-    async get(key: string): Promise<number | null> {
-        return await this.client.get(`state:${key}`);
-    }
-
-    async getAllGames(): Promise<Game[]> {
         try {
-            // Get all game keys
-            const gameKeys = await this.client.keys('game:*');
-
-            if (gameKeys.length === 0) {
-                return [];
-            }
-
-            // Get all games data
-            const gamesData = await Promise.all(
-                gameKeys.map(key => this.client.get(key))
+            await this.client.set(
+                `game:${gameId}`,
+                JSON.stringify(game),
+                { EX: 300 } // 5 minutes expiration
             );
-
-            // Parse and filter out any invalid data
-            return gamesData
-                .filter(data => data !== null)
-                .map(data => JSON.parse(data));
-
         } catch (error) {
-            console.error('Error fetching all games from Redis:', error);
-            throw error;
-        }
-    }
-
-    //Deletes a Game from Redis including all the Game States.
-    async deleteGame(gameId: string): Promise<void> {
-        try {
-            await this.client.del(`game:${gameId}`);
-            await this.deleteGameState(gameId);
-        } catch (error) {
-            console.error(`Error deleting game ${gameId} from Redis:`, error);
-            throw error;
-        }
-    }
-
-    //Deletes Game States.
-    async deleteGameState(gameId: string): Promise<void> {
-        try {
-            // delete the game states
-            const keys = await this.client.keys(`state:${gameId}:*`);
-            if (keys.length === 0) {
-                return;
-            }
-            if (keys) await Promise.all(keys.map(key => this.client.del(key)));
-        } catch (error) {
-            console.error(`Error deleting game ${gameId} from Redis:`, error);
+            console.error('Redis setGame error:', error);
             throw error;
         }
     }
 
     async getGame(gameId: string): Promise<Game | null> {
-        const game = await this.client.get(`game:${gameId}`);
-        return game ? JSON.parse(game) : null;
+        try {
+            const gameData = await this.client.get(`game:${gameId}`);
+            if (!gameData) return null;
+
+            const game = JSON.parse(gameData) as Game;
+            // Convert string dates back to Date objects
+            if (game.lastMoveAt) {
+                game.lastMoveAt = new Date(game.lastMoveAt);
+            }
+            if (game.moves) {
+                game.moves = game.moves.map(move => ({
+                    ...move,
+                    timestamp: new Date(move.timestamp)
+                }));
+            }
+            return game;
+        } catch (error) {
+            console.error('Redis getGame error:', error);
+            throw error;
+        }
     }
 
-    //Create functions to Save, Get and Delete AnalysisResult using gameid
-    async saveAnalysisResult(gameId: string, analysisResult: AnalysisResult): Promise<void> {
-        await this.client.set(
-            `analysis:${gameId}`,
-            JSON.stringify(analysisResult),
-            { EX: 2400 } // 40 minutes expiration
-        );
+    async set(key: string, value: string | number): Promise<void> {
+        try {
+            await this.client.set(key, value.toString());
+        } catch (error) {
+            console.error('Redis set error:', error);
+            throw error;
+        }
+    }
+
+    async get(key: string): Promise<string | null> {
+        try {
+            return await this.client.get(key);
+        } catch (error) {
+            console.error('Redis get error:', error);
+            throw error;
+        }
+    }
+
+    async saveAnalysisResult(gameId: string, analysis: AnalysisResult): Promise<void> {
+        try {
+            await this.client.set(
+                `analysis:${gameId}`,
+                JSON.stringify(analysis),
+                { EX: 300 } // 5 minutes expiration
+            );
+        } catch (error) {
+            console.error('Redis saveAnalysisResult error:', error);
+            throw error;
+        }
     }
 
     async getAnalysisResult(gameId: string): Promise<AnalysisResult | null> {
-        const analysisResult = await this.client.get(`analysis:${gameId}`);
-        return analysisResult ? JSON.parse(analysisResult) : null;
+        try {
+            const analysisData = await this.client.get(`analysis:${gameId}`);
+            return analysisData ? JSON.parse(analysisData) as AnalysisResult : null;
+        } catch (error) {
+            console.error('Redis getAnalysisResult error:', error);
+            throw error;
+        }
     }
 
-    async deleteAnalysisResult(gameId: string): Promise<void> {
-        await this.client.del(`analysis:${gameId}`);
+    async del(key: string): Promise<void> {
+        try {
+            await this.client.del(key);
+        } catch (error) {
+            console.error('Redis del error:', error);
+            throw error;
+        }
     }
 
+    async disconnect(): Promise<void> {
+        try {
+            await this.client.quit();
+        } catch (error) {
+            console.error('Redis disconnect error:', error);
+            throw error;
+        }
+    }
 }

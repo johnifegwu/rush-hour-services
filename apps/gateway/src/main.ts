@@ -1,25 +1,30 @@
+// apps/gateway/src/main.ts
 import { NestFactory } from '@nestjs/core';
-import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
-import { ValidationPipe } from '@nestjs/common';
 import { GatewayModule } from './gateway.module';
-import { HttpExceptionFilter } from '../../../shared/src/filters/http-exception.filter';
+import { ValidationPipe } from '@nestjs/common';
+import * as compression from 'compression';
+import helmet from 'helmet';
 
 async function bootstrap() {
   const app = await NestFactory.create(GatewayModule);
 
-  app.useGlobalPipes(new ValidationPipe());
-  app.useGlobalFilters(new HttpExceptionFilter());
+  // Global middleware
+  app.use(compression());
+  app.use(helmet());
 
-  const config = new DocumentBuilder()
-    .setTitle('Rush Hour Game API')
-    .setDescription('The Rush Hour puzzle game API')
-    .setVersion('1.0')
-    .addTag('game')
-    .build();
+  // Global pipes
+  app.useGlobalPipes(
+    new ValidationPipe({
+      transform: true,
+      whitelist: true,
+      forbidNonWhitelisted: true,
+    })
+  );
 
-  const document = SwaggerModule.createDocument(app, config);
-  SwaggerModule.setup('api', app, document);
+  const port = process.env.PORT || 3000;
+  // Enable CORS
+  app.enableCors();
 
-  await app.listen(3000);
+  await app.listen(port);
 }
 bootstrap();

@@ -6,8 +6,18 @@ import { MoveCarDto } from '../dto/move-car.dto';
 import { RedisService } from './redis.service';
 import { RabbitMQService } from './rabbitmq.service';
 import { BadRequestException, NotFoundException } from '../exceptions';
-import { GameMove, MovementDirection, MoveQuality } from '../interfaces/rush-hour.interface';
+import { AnalysisResult, GameMove, MovementDirection, MoveQuality, Step } from '../interfaces/rush-hour.interface';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
+
+type Position = [number, number];
+
+interface Car {
+    positions: Position[];
+    orientation: 'horizontal' | 'vertical';
+    id?: number;
+    movementRange?: number;
+}
+
 
 interface PriorityQueueNode {
     value: State;
@@ -124,13 +134,13 @@ export class GameService {
 
     async getGame(gameId: string): Promise<Game> {
         //Look for game in redis
-        let game = await this.redisService.getGame(gameId);
-
-        //Return game if found
-        if (game) return game as Game;
+        const game = await this.redisService.getGame(gameId);
 
         //Throw NotFoundException if game was not found
         if (!game) throw new NotFoundException('Game not found');
+
+        //Return game if found
+        return game as Game;
     }
 
     private async updateGame(gameId: string, game: Game) {
@@ -145,12 +155,16 @@ export class GameService {
             const boards = await this.boardModel.find().exec();
 
             if (difficulty) {
-                return boards.filter(board => this.getBoardDifficulty(board) === difficulty);
+                return boards.filter(async board => await this.getBoardDifficulty(board) === difficulty);
             }
 
             return boards;
-        } catch (error) {
-            throw new Error(`Failed to fetch boards: ${error.message}`);
+        } catch (error: unknown) {
+            if (error instanceof Error) {
+                throw new Error(`Failed to fetch boards: ${error.message}`);
+            } else {
+                throw new Error('Failed to fetch boards: Unknown error');
+            }
         }
     }
 
@@ -383,7 +397,7 @@ export class GameService {
         const solution: Step[] = [];
         let currentState = finalState;
 
-        while (currentState) {
+        while (currentState !== null) {
             const visitedInfo = visited.get(this.getStateKey(currentState));
             if (!visitedInfo) break;
 
@@ -391,13 +405,31 @@ export class GameService {
                 solution.unshift(visitedInfo.move);
             }
 
+            if (visitedInfo.previousState === null) break;
             currentState = visitedInfo.previousState;
         }
-
         return solution;
     }
 
-    async getAnalysis(gameId: string): Promise<{
+    async getAnalysis(gameId: string): Promise<AnalysisResult> {
+        const analysis = await this.redisService.getAnalysisResult(gameId);
+
+        if (!analysis) {
+            throw new Error('Analysis not found');
+        }
+
+        return analysis;
+    }
+
+    async createAnalysis(gameId: string): Promise<void> {
+        // Publish event for move quality calculation
+        await this.rabbitMQService.publishMoveEvent({
+            type: 'CREATE_ANALYSIS',
+            gameId: gameId,
+        });
+    }
+
+    async createAnalysisFromWorker(gameId: string): Promise<{
         totalMoves: number;
         goodMoves: number;
         wasteMoves: number;
@@ -470,14 +502,19 @@ export class GameService {
             throw new NotFoundException('Game not found');
         }
 
-        // Optionally send to archive queue for additional processing
-        const calcMovePayload: CalcMoveQuality = {
-            type: 'CALC_MOVE',
-            gameId: game.id,
-            moveCarDto: moveCarDto
-        };
+        // Check if game has been inactive for at least five minutes
+        const now = new Date();
+        const fiveMinutesAgo = new Date(now.getTime() - 5 * 60 * 1000);
+        if (game.lastMoveAt <= fiveMinutesAgo) {
+            throw new BadRequestException('Game has been inactive for too long');
+        }
 
-        this.rabbitMQService.sendToQueue('move_calculation', calcMovePayload);
+        // Publish event for move quality calculation
+        await this.rabbitMQService.publishMoveEvent({
+            type: 'CALC_MOVE',
+            gameId: gameId,
+            move: moveCarDto,
+        });
 
 
         return game;
@@ -489,7 +526,12 @@ export class GameService {
             throw new NotFoundException('Game not found');
         }
 
-        return game;
+        if (game.moves.length === 0) {
+            throw new NotFoundException('No moves found');
+        }
+
+        // Return the last move
+        return game.moves[game.moves.length - 1];
     }
 
     async calcMoveQuality(gameId: string, moveCarDto: MoveCarDto) {
@@ -548,10 +590,14 @@ export class GameService {
 
             return updatedGame as Game;
 
-        } catch (error) {
+        } catch (error: unknown) {
             // Handle Redis errors or other issues gracefully
-            console.error('Redis error:', error.message);
-            throw new Error('An error occurred while processing the game move');
+            if (error instanceof Error) {
+                console.error('Redis error:', error.message);
+                throw new Error('An error occurred while processing the game move');
+            } else {
+                throw new Error('An error occurred while processing the game move');
+            }
         }
     }
 
@@ -748,10 +794,15 @@ export class GameService {
 
             return Infinity;
 
-        } catch (error) {
+        } catch (error: unknown) {
             // Handle Redis errors or other issues gracefully
-            console.error('Redis error:', error.message);
-            throw new Error('An error occurred while processing the game state');
+            if (error instanceof Error) {
+                console.error('Redis error:', error.message);
+                throw new Error('An error occurred while processing the game state');
+            } else {
+                throw new Error('An error occurred while processing the game state');
+            }
+
         }
     }
 
@@ -940,7 +991,7 @@ export class GameService {
         }
     }
 
-    private async getBoardDifficulty(board: Board): string {
+    private async getBoardDifficulty(board: Board): Promise<string> {
         // Implement difficulty calculation based on board complexity
         const complexity = await this.calculateBoardComplexity(board);
         if (complexity < 10) return 'easy';
@@ -1040,8 +1091,12 @@ export class GameService {
 
             return Math.min(Math.max(complexityScore, 0), 100);
 
-        } catch (error) {
-            console.error('Error calculating board complexity:', error);
+        } catch (error: unknown) {
+            if (error instanceof Error) {
+                console.error('Error calculating board complexity:', error);
+            } else {
+                console.error('Error calculating board complexity: Unknown error');
+            }
             return 50; // Return medium difficulty if calculation fails
         }
     }
@@ -1057,7 +1112,7 @@ export class GameService {
     }
 
     private async processCarChunk(
-        chunk: [number, { positions: [number, number][]; orientation: string; movementRange: number }][],
+        chunk: [number, Car][],
         matrix: number[][]
     ): Promise<void> {
         chunk.forEach(([id, car]) => {
@@ -1067,7 +1122,7 @@ export class GameService {
     }
 
     private calculateCarMovementRange(
-        car: { positions: [number, number][]; orientation: string },
+        car: Car,
         matrix: number[][]
     ): number {
         return car.orientation === 'horizontal'
@@ -1076,7 +1131,7 @@ export class GameService {
     }
 
     private calculateHorizontalMovementRange(
-        car: { positions: [number, number][] },
+        car: Car,
         matrix: number[][]
     ): number {
         const row = car.positions[0][0];
@@ -1089,7 +1144,7 @@ export class GameService {
     }
 
     private calculateVerticalMovementRange(
-        car: { positions: [number, number][] },
+        car: Car,
         matrix: number[][]
     ): number {
         const col = car.positions[0][1];
@@ -1101,13 +1156,13 @@ export class GameService {
         return upwardRange + downwardRange;
     }
 
-    private getColumnBoundaries(positions: [number, number][]): [number, number] {
-        const cols = positions.map(pos => pos[1]);
+    private getColumnBoundaries(positions: Position[]): [number, number] {
+        const cols = positions.map((pos: Position): number => pos[1]);
         return [Math.min(...cols), Math.max(...cols)];
     }
 
-    private getRowBoundaries(positions: [number, number][]): [number, number] {
-        const rows = positions.map(pos => pos[0]);
+    private getRowBoundaries(positions: Position[]): [number, number] {
+        const rows = positions.map((pos: Position): number => pos[0]);
         return [Math.min(...rows), Math.max(...rows)];
     }
 
@@ -1200,7 +1255,7 @@ export class GameService {
         return totalRestriction / maxRestriction;
     }
 
-    private getAvailableDirections(car: any, matrix: number[][]): MovementDirection[] {
+    private getAvailableDirections(car: Car, matrix: number[][]): MovementDirection[] {
         const directions: MovementDirection[] = [];
         const isHorizontal = car.orientation === 'horizontal';
 
@@ -1223,33 +1278,33 @@ export class GameService {
         return chunks;
     }
 
-    private isCarBlocked(car: any, matrix: number[][]): boolean {
+    private isCarBlocked(car: Car, matrix: number[][]): boolean {
         return this.getAvailableDirections(car, matrix).length === 0;
     }
 
-    // Helper methods for movement checks
-    private canMoveLeft(car: any, matrix: number[][]): boolean {
+    private canMoveLeft(car: Car, matrix: number[][]): boolean {
         const row = car.positions[0][0];
-        const minCol = Math.min(...car.positions.map(pos => pos[1]));
+        const minCol = Math.min(...car.positions.map((pos: Position): number => pos[1]));
         return minCol > 0 && matrix[row][minCol - 1] === 0;
     }
 
-    private canMoveRight(car: any, matrix: number[][]): boolean {
+    private canMoveRight(car: Car, matrix: number[][]): boolean {
         const row = car.positions[0][0];
-        const maxCol = Math.max(...car.positions.map(pos => pos[1]));
+        const maxCol = Math.max(...car.positions.map((pos: Position): number => pos[1]));
         return maxCol < matrix[0].length - 1 && matrix[row][maxCol + 1] === 0;
     }
 
-    private canMoveUp(car: any, matrix: number[][]): boolean {
+    private canMoveUp(car: Car, matrix: number[][]): boolean {
         const col = car.positions[0][1];
-        const minRow = Math.min(...car.positions.map(pos => pos[0]));
+        const minRow = Math.min(...car.positions.map((pos: Position): number => pos[0]));
         return minRow > 0 && matrix[minRow - 1][col] === 0;
     }
 
-    private canMoveDown(car: any, matrix: number[][]): boolean {
+    private canMoveDown(car: Car, matrix: number[][]): boolean {
         const col = car.positions[0][1];
-        const maxRow = Math.max(...car.positions.map(pos => pos[0]));
+        const maxRow = Math.max(...car.positions.map((pos: Position): number => pos[0]));
         return maxRow < matrix.length - 1 && matrix[maxRow + 1][col] === 0;
     }
 
 }
+
