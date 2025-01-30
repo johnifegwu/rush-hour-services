@@ -723,7 +723,7 @@ export class GameService {
         }
 
         const stateKey = this.getStateKey(state);
-        const redisKey = `${gameId}:${stateKey}`; // Combine gameId and stateKey
+        const redisKey = `state:${gameId}:${stateKey}`; // Combine gameId and stateKey
 
         try {
 

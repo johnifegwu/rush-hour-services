@@ -69,7 +69,11 @@ export class RedisService {
 
     async set(key: string, value: string | number): Promise<void> {
         try {
-            await this.client.set(key, value.toString());
+            await this.client.set(
+                key,
+                value,
+                { EX: 300 } // 5 minutes expiration
+            );
         } catch (error) {
             console.error('Redis set error:', error);
             throw error;
@@ -111,6 +115,26 @@ export class RedisService {
     async del(key: string): Promise<void> {
         try {
             await this.client.del(key);
+        } catch (error) {
+            console.error('Redis del error:', error);
+            throw error;
+        }
+    }
+
+    async deleteGame(gameId: string): Promise<void> {
+        try {
+            //get all keys that starts with 'state:${gameId}:*'
+            const keys = await this.client.keys(`state:${gameId}:*`);
+
+            // Delete game from redis
+            await this.client.del(gameId);
+
+            // Delete game analysis
+            await this.client.del(`analysis:${gameId}`);
+
+            // using Promise.All delete all states from redis with keys.map
+            await Promise.all(keys.map(key => this.client.del(key)));
+
         } catch (error) {
             console.error('Redis del error:', error);
             throw error;
