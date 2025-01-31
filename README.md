@@ -2,6 +2,7 @@
 
 ![alt text](image.png)
 
+![rush-hour-02](https://github.com/user-attachments/assets/d00912f4-d9eb-4bfb-8736-3c3a671997d9)
 
 ```
 npm install --legacy-peer-deps
@@ -42,6 +43,7 @@ Car Movement Sample:
     "direction": "Up"
 }
 ```
+![rush-hour-03](https://github.com/user-attachments/assets/ac6cb223-1242-4cb2-9f7e-44118a581130)
 
 <a alt="Nx logo" href="https://nx.dev" target="_blank" rel="noreferrer"><img src="https://raw.githubusercontent.com/nrwl/nx/master/images/nx-logo.png" width="45"></a>
 
