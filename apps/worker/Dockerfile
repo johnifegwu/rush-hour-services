@@ -15,7 +15,8 @@ COPY apps/worker ./apps/worker
 COPY shared/src ./shared/src
 
 # Install dependencies
-RUN npm ci
+#RUN npm ci
+RUN npm install --force
 
 # Build the application (Changed this line)
 RUN npx nx build worker

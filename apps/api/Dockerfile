@@ -15,7 +15,8 @@ COPY apps/api ./apps/api
 COPY shared ./shared
 
 # Install dependencies
-RUN npm ci
+#RUN npm ci
+RUN npm install --force
 
 # Build the application (Changed this line)
 RUN npx nx build api

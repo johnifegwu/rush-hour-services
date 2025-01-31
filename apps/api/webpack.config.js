@@ -15,25 +15,5 @@ module.exports = composePlugins(withNx(), (config) => {
     minimize: false
   };
 
-  // Ensure assets are handled
-  config.module = {
-    ...config.module,
-    rules: [
-      ...(config.module?.rules || []),
-      {
-        test: /\.(txt|png|jpg|jpeg|gif|ico)$/,
-        use: [
-          {
-            loader: 'file-loader',
-            options: {
-              name: '[name].[ext]',
-              outputPath: 'assets',
-            },
-          },
-        ],
-      },
-    ],
-  };
-
   return config;
 });

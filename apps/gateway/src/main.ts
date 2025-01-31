@@ -2,7 +2,7 @@
 import { NestFactory } from '@nestjs/core';
 import { GatewayModule } from './gateway.module';
 import { ValidationPipe } from '@nestjs/common';
-import * as compression from 'compression';
+import compression from 'compression';
 import helmet from 'helmet';
 
 async function bootstrap() {

@@ -50,8 +50,6 @@ services:
     build:
       context: .
       dockerfile: ${DOCKERFILE:-apps/gateway/Dockerfile}
-      args:
-        - NODE_ENV=production
     container_name: gateway
     restart: always
     ports:
@@ -70,8 +68,6 @@ services:
     build:
       context: .
       dockerfile: ${DOCKERFILE:-apps/api/Dockerfile}
-      args:
-        - NODE_ENV=production
     container_name: api
     restart: always
     ports:
@@ -90,8 +86,6 @@ services:
     build:
       context: .
       dockerfile: ${DOCKERFILE:-apps/worker/Dockerfile}
-      args:
-        - NODE_ENV=production
     container_name: worker
     restart: always
     ports:
@@ -110,8 +104,6 @@ services:
     build:
       context: .
       dockerfile: ${DOCKERFILE:-apps/cron/Dockerfile}
-      args:
-        - NODE_ENV=production
     container_name: cron
     restart: always
     ports:

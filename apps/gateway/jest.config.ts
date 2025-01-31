@@ -1,4 +1,4 @@
-export default {
+module.exports = {
   displayName: 'gateway',
   preset: '../../jest.preset.js',
   testEnvironment: 'node',

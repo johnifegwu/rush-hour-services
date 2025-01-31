@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
-import { GameService } from 'shared/src/services';
-import { CreateBoardDto, MoveCarDto } from 'shared/src/dto';
+import { GameService } from '.././../../shared/src/services';
+import { CreateBoardDto, MoveCarDto } from '../../../shared/src/dto';
 
 @Injectable()
 export class ApiService {

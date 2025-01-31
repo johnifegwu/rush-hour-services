@@ -31,8 +31,13 @@ export class GatewayController {
             const result = await this.gatewayService.createBoard(createBoardDto);
             this.logger.log(`Board created successfully`);
             return result;
-        } catch (error) {
-            this.logger.error(`Failed to create board: ${error.message}`);
+        } catch (error: unknown) {
+            if (error instanceof HttpException) {
+                this.logger.error(`Failed to create board: ${error.message}`);
+            } else {
+                this.logger.error(`Failed to create board: ${error}`);
+            }
+
             throw new HttpException(
                 'Failed to create board',
                 HttpStatus.BAD_REQUEST
@@ -47,8 +52,12 @@ export class GatewayController {
             const result = await this.gatewayService.startGame(data.boardId);
             this.logger.log(`Game started with board ID: ${data.boardId}`);
             return result;
-        } catch (error) {
-            this.logger.error(`Failed to start game: ${error.message}`);
+        } catch (error: unknown) {
+            if (error instanceof HttpException) {
+                this.logger.error(`Failed to start game: ${error.message}`);
+            } else {
+                this.logger.error(`Failed to start game: ${error}`);
+            }
             throw new HttpException(
                 'Failed to start game',
                 HttpStatus.BAD_REQUEST
@@ -62,8 +71,13 @@ export class GatewayController {
             const game = await this.gatewayService.getGame(gameId);
             this.logger.log(`Retrieved game: ${gameId}`);
             return game;
-        } catch (error) {
-            this.logger.error(`Failed to get game ${gameId}: ${error.message}`);
+        } catch (error: unknown) {
+            if (error instanceof HttpException) {
+                this.logger.error(`Failed to get game ${gameId}: ${error.message}`);
+            } else {
+                this.logger.error(`Failed to get game ${gameId}: ${error}`);
+            }
+
             throw new HttpException(
                 'Game not found',
                 HttpStatus.NOT_FOUND
@@ -80,8 +94,13 @@ export class GatewayController {
             const result = await this.gatewayService.moveCar(gameId, moveCarDto);
             this.logger.log(`Car moved in game ${gameId}`);
             return result;
-        } catch (error) {
-            this.logger.error(`Invalid move in game ${gameId}: ${error.message}`);
+        } catch (error: unknown) {
+            if (error instanceof HttpException) {
+                this.logger.error(`Failed to move car in game ${gameId}: ${error.message}`);
+            } else {
+                this.logger.error(`Failed to move car in game ${gameId}: ${error}`);
+            }
+
             throw new HttpException(
                 'Invalid move',
                 HttpStatus.BAD_REQUEST
@@ -95,8 +114,13 @@ export class GatewayController {
             const moves = await this.gatewayService.getValidMoves(gameId);
             this.logger.log(`Retrieved valid moves for game ${gameId}`);
             return moves;
-        } catch (error) {
-            this.logger.error(`Failed to get moves for game ${gameId}: ${error.message}`);
+        } catch (error: unknown) {
+            if (error instanceof HttpException) {
+                this.logger.error(`Failed to get moves for game ${gameId}: ${error.message}`);
+            } else {
+                this.logger.error(`Failed to get moves for game ${gameId}: ${error}`);
+            }
+
             throw new HttpException(
                 'Move not found',
                 HttpStatus.NOT_FOUND
@@ -110,8 +134,13 @@ export class GatewayController {
             const boards = await this.gatewayService.getBoards(difficulty);
             this.logger.log(`Retrieved boards with difficulty: ${difficulty || 'all'}`);
             return boards;
-        } catch (error) {
-            this.logger.error(`Failed to get boards: ${error.message}`);
+        } catch (error: unknown) {
+            if (error instanceof HttpException) {
+                this.logger.error(`Failed to get boards: ${error.message}`);
+            } else {
+                this.logger.error(`Failed to get boards: ${error}`);
+            }
+
             throw new HttpException(
                 'Failed to retrieve boards',
                 HttpStatus.INTERNAL_SERVER_ERROR
@@ -125,8 +154,12 @@ export class GatewayController {
             const board = await this.gatewayService.getBoard(boardId);
             this.logger.log(`Retrieved board: ${boardId}`);
             return board;
-        } catch (error) {
-            this.logger.error(`Failed to get board ${boardId}: ${error.message}`);
+        } catch (error: unknown) {
+            if (error instanceof HttpException) {
+                this.logger.error(`Failed to get board ${boardId}: ${error.message}`);
+            } else {
+                this.logger.error(`Failed to get board ${boardId}: ${error}`);
+            }
             throw new HttpException(
                 'Board not found',
                 HttpStatus.NOT_FOUND
@@ -141,8 +174,13 @@ export class GatewayController {
             const hint = await this.gatewayService.getHint(gameId);
             this.logger.log(`Hint provided for game ${gameId}`);
             return hint;
-        } catch (error) {
-            this.logger.error(`Failed to get hint for game ${gameId}: ${error.message}`);
+        } catch (error: unknown) {
+            if (error instanceof HttpException) {
+                this.logger.error(`Failed to get hint for game ${gameId}: ${error.message}`);
+            } else {
+                this.logger.error(`Failed to get hint for game ${gameId}: ${error}`);
+            }
+
             throw new HttpException(
                 'Failed to get hint',
                 HttpStatus.BAD_REQUEST
@@ -157,8 +195,12 @@ export class GatewayController {
             const solution = await this.gatewayService.getSolution(gameId);
             this.logger.log(`Solution provided for game ${gameId}`);
             return solution;
-        } catch (error) {
-            this.logger.error(`Failed to get solution for game ${gameId}: ${error.message}`);
+        } catch (error: unknown) {
+            if (error instanceof HttpException) {
+                this.logger.error(`Failed to get solution for game ${gameId}: ${error.message}`);
+            } else {
+                this.logger.error(`Failed to get solution for game ${gameId}: ${error}`);
+            }
             throw new HttpException(
                 'Failed to get solution',
                 HttpStatus.BAD_REQUEST
@@ -172,8 +214,13 @@ export class GatewayController {
             const analysis = await this.gatewayService.createAnalysis(gameId);
             this.logger.log(`Analysis created for game ${gameId}`);
             return analysis;
-        } catch (error) {
-            this.logger.error(`Failed to create analysis for game ${gameId}: ${error.message}`);
+        } catch (error: unknown) {
+            if (error instanceof HttpException) {
+                this.logger.error(`Failed to create analysis for game ${gameId}: ${error.message}`);
+            } else {
+                this.logger.error(`Failed to create analysis for game ${gameId}: ${error}`);
+            }
+
             throw new HttpException(
                 'Failed to create analysis',
                 HttpStatus.BAD_REQUEST
@@ -187,8 +234,13 @@ export class GatewayController {
             const analysis = await this.gatewayService.getAnalysis(gameId);
             this.logger.log(`Retrieved analysis for game ${gameId}`);
             return analysis;
-        } catch (error) {
-            this.logger.error(`Failed to get analysis for game ${gameId}: ${error.message}`);
+        } catch (error: unknown) {
+            if (error instanceof HttpException) {
+                this.logger.error(`Failed to get analysis for game ${gameId}: ${error.message}`);
+            } else {
+                this.logger.error(`Failed to get analysis for game ${gameId}: ${error}`);
+            }
+
             throw new HttpException(
                 'Analysis not found',
                 HttpStatus.NOT_FOUND
@@ -202,8 +254,12 @@ export class GatewayController {
             const result = await this.gatewayService.abandonGame(gameId);
             this.logger.log(`Game ${gameId} abandoned`);
             return result;
-        } catch (error) {
-            this.logger.error(`Failed to abandon game ${gameId}: ${error.message}`);
+        } catch (error: unknown) {
+            if (error instanceof HttpException) {
+                this.logger.error(`Failed to abandon game ${gameId}: ${error.message}`);
+            } else {
+                this.logger.error(`Failed to abandon game ${gameId}: ${error}`);
+            }
             throw new HttpException(
                 'Failed to abandon game',
                 HttpStatus.BAD_REQUEST
@@ -217,8 +273,12 @@ export class GatewayController {
             const leaderboard = await this.gatewayService.getLeaderboard(timeFrame);
             this.logger.log(`Retrieved leaderboard for timeframe: ${timeFrame}`);
             return leaderboard;
-        } catch (error) {
-            this.logger.error(`Failed to get leaderboard: ${error.message}`);
+        } catch (error: unknown) {
+            if (error instanceof HttpException) {
+                this.logger.error(`Failed to get leaderboard: ${error.message}`);
+            } else {
+                this.logger.error(`Failed to get leaderboard: ${error}`);
+            }
             throw new HttpException(
                 'Failed to retrieve leaderboard',
                 HttpStatus.INTERNAL_SERVER_ERROR

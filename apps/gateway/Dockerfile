@@ -15,7 +15,8 @@ COPY apps/gateway ./apps/gateway
 COPY shared ./shared
 
 # Install dependencies
-RUN npm ci
+#RUN npm ci
+RUN npm install --force
 
 # Build the application
 RUN npx nx build gateway

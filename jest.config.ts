@@ -1,5 +1,5 @@
 import { getJestProjects } from '@nx/jest';
 
-export default async () => ({
+module.exports = async () => ({
   projects: getJestProjects(),
 });
