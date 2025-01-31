@@ -4,6 +4,7 @@ services:
   # Infrastructure Services
   mongodb:
     image: mongo
+    container_name: mongodb
     restart: always
     environment:
       MONGO_INITDB_ROOT_USERNAME: ${MONGO_USERNAME}
@@ -12,29 +13,38 @@ services:
       - "27017:27017"
     volumes:
       - mongodb_data:/data/db
+    networks:
+      - rushhourproxybackend
 
   redis:
     image: redis
+    container_name: redis
     restart: always
     ports:
       - "6379:6379"
     volumes:
       - redis_data:/data
+    networks:
+      - rushhourproxybackend
 
   redis-commander:
     image: rediscommander/redis-commander:latest
+    container_name: redis-commander
     restart: always
     environment:
-      - REDIS_HOSTS=local:redis:6379
-      - HTTP_USER=${REDIS_COMMANDER_USER}
-      - HTTP_PASSWORD=${REDIS_COMMANDER_PASSWORD}
+      - REDIS_HOSTS=redis:redis:6379
+      #- HTTP_USER=${REDIS_COMMANDER_USER}
+      #- HTTP_PASSWORD=${REDIS_COMMANDER_PASSWORD}
     ports:
       - "8081:8081"
     depends_on:
       - redis
+    networks:
+      - rushhourproxybackend
 
   rabbitmq:
     image: rabbitmq:3-management
+    container_name: rabbitmq
     restart: always
     ports:
       - "5672:5672" # AMQP protocol port
@@ -44,6 +54,8 @@ services:
       RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD}
     volumes:
       - rabbitmq_data:/var/lib/rabbitmq
+    networks:
+      - rushhourproxybackend
 
   # Application Services
   gateway:
@@ -58,11 +70,14 @@ services:
       - mongodb
       - redis
       - rabbitmq
+      - redis-commander
     environment:
       - PORT=3000
       - MONGO_URI=mongodb://${MONGO_USERNAME}:${MONGO_PASSWORD}@mongodb:${MONGOBD_PORT}
       - REDIS_URI=redis://redis:${REDIS_PORT}
       - RABBITMQ_URI=amqp://${RABBITMQ_USER}:${RABBITMQ_PASSWORD}@rabbitmq:${RABBITMQ_PORT}
+    networks:
+      - rushhourproxybackend
 
   api:
     build:
@@ -76,11 +91,14 @@ services:
       - mongodb
       - redis
       - rabbitmq
+      - redis-commander
     environment:
-      - PORT=3000
+      - PORT=3001
       - MONGO_URI=mongodb://${MONGO_USERNAME}:${MONGO_PASSWORD}@mongodb:${MONGOBD_PORT}
       - REDIS_URI=redis://redis:${REDIS_PORT}
       - RABBITMQ_URI=amqp://${RABBITMQ_USER}:${RABBITMQ_PASSWORD}@rabbitmq:${RABBITMQ_PORT}
+    networks:
+      - rushhourproxybackend
 
   worker:
     build:
@@ -94,11 +112,14 @@ services:
       - mongodb
       - redis
       - rabbitmq
+      - redis-commander
     environment:
       - PORT=3005
       - MONGO_URI=mongodb://${MONGO_USERNAME}:${MONGO_PASSWORD}@mongodb:${MONGOBD_PORT}
       - REDIS_URI=redis://redis:${REDIS_PORT}
       - RABBITMQ_URI=amqp://${RABBITMQ_USER}:${RABBITMQ_PASSWORD}@rabbitmq:${RABBITMQ_PORT}
+    networks:
+      - rushhourproxybackend
 
   cron:
     build:
@@ -112,11 +133,19 @@ services:
       - mongodb
       - redis
       - rabbitmq
+      - redis-commander
     environment:
       - PORT=3002
       - MONGO_URI=mongodb://${MONGO_USERNAME}:${MONGO_PASSWORD}@mongodb:${MONGOBD_PORT}
       - REDIS_URI=redis://redis:${REDIS_PORT}
       - RABBITMQ_URI=amqp://${RABBITMQ_USER}:${RABBITMQ_PASSWORD}@rabbitmq:${RABBITMQ_PORT}
+    networks:
+      - rushhourproxybackend
+
+networks:
+  rushhourproxybackend:
+    name: rushhourproxybackend
+    driver: bridge
 
 volumes:
   mongodb_data:

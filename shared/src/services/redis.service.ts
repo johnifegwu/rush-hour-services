@@ -1,33 +1,43 @@
 import { Injectable } from '@nestjs/common';
-import { createClient } from 'redis';
-import type { RedisClientType } from 'redis';
+import Redis from 'ioredis';
 import { Game } from '../schemas/game.schema';
+import { ConfigService } from '@nestjs/config';
 import { AnalysisResult } from '../interfaces/rush-hour.interface';
 
 @Injectable()
 export class RedisService {
-    private client: RedisClientType;
+    private client: Redis;
 
-    constructor() {
-        this.client = createClient({
-            url: process.env['REDIS_URI'] || `redis://localhost:${process.env['REDIS_PORT'] || 6379}`
+    constructor(private configService: ConfigService) {
+        // Parse the Redis URI to extract connection details
+        const url = new URL(this.configService.get<string>('REDIS_URI', 'redis://redis:6379'));
+        console.log('Redis URL:', url);
+
+        this.client = new Redis({
+            host: url.hostname,
+            port: parseInt(url.port, 10) || 6379,
+            username: url.username || undefined,
+            password: url.password || undefined,
+            retryStrategy: (times: number) => {
+                // Retry with exponential backoff
+                return Math.min(times * 50, 2000);
+            }
         });
 
-        this.client.connect().catch(err => {
-            console.error('Redis connection error:', err);
-        });
-
-        this.client.on('error', (err) => {
+        this.client.on('error', (err: any) => {
             console.error('Redis client error:', err);
+        });
+
+        this.client.on('connect', () => {
+            console.log('Successfully connected to Redis');
         });
     }
 
-    getClient(): RedisClientType {
-        if (!this.client.isOpen) {
-            this.client.connect().catch(err => {
-                console.error('Redis reconnection error:', err);
-            });
-        }
+    async onModuleDestroy() {
+        await this.client.quit();
+    }
+
+    getClient(): Redis {
         return this.client;
     }
 
@@ -36,7 +46,8 @@ export class RedisService {
             await this.client.set(
                 `game:${gameId}`,
                 JSON.stringify(game),
-                { EX: 300 } // 5 minutes expiration
+                'EX',
+                300 // 5 minutes expiration
             );
         } catch (error) {
             console.error('Redis setGame error:', error);
@@ -69,11 +80,7 @@ export class RedisService {
 
     async set(key: string, value: string | number): Promise<void> {
         try {
-            await this.client.set(
-                key,
-                value,
-                { EX: 300 } // 5 minutes expiration
-            );
+            await this.client.set(key, value, 'EX', 300);
         } catch (error) {
             console.error('Redis set error:', error);
             throw error;
@@ -94,7 +101,8 @@ export class RedisService {
             await this.client.set(
                 `analysis:${gameId}`,
                 JSON.stringify(analysis),
-                { EX: 300 } // 5 minutes expiration
+                'EX',
+                300
             );
         } catch (error) {
             console.error('Redis saveAnalysisResult error:', error);
@@ -112,31 +120,22 @@ export class RedisService {
         }
     }
 
-    async del(key: string): Promise<void> {
-        try {
-            await this.client.del(key);
-        } catch (error) {
-            console.error('Redis del error:', error);
-            throw error;
-        }
-    }
-
     async deleteGame(gameId: string): Promise<void> {
         try {
-            //get all keys that starts with 'state:${gameId}:*'
             const keys = await this.client.keys(`state:${gameId}:*`);
 
-            // Delete game from redis
-            await this.client.del(gameId);
+            // Create a pipeline for batch operations
+            const pipeline = this.client.pipeline();
 
-            // Delete game analysis
-            await this.client.del(`analysis:${gameId}`);
+            // Add delete operations to pipeline
+            pipeline.del(`game:${gameId}`);
+            pipeline.del(`analysis:${gameId}`);
+            keys.forEach(key => pipeline.del(key));
 
-            // using Promise.All delete all states from redis with keys.map
-            await Promise.all(keys.map(key => this.client.del(key)));
-
+            // Execute all operations atomically
+            await pipeline.exec();
         } catch (error) {
-            console.error('Redis del error:', error);
+            console.error('Redis deleteGame error:', error);
             throw error;
         }
     }

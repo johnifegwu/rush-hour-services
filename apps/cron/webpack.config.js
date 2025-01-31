@@ -1,19 +1,46 @@
-const { composePlugins, withNx } = require('@nx/webpack');
+const { NxWebpackPlugin } = require('@nx/webpack');
 const { join } = require('path');
 
-module.exports = composePlugins(withNx(), (config) => {
-  // Update the webpack config
-  config.output = {
+module.exports = {
+  output: {
     path: join(__dirname, '../../dist/apps/cron'),
-  };
-
-  // Set target to node since this is a Node.js application
-  config.target = 'node';
-
-  // Disable optimization
-  config.optimization = {
-    minimize: false
-  };
-
-  return config;
-});
+  },
+  plugins: [
+    new NxWebpackPlugin({
+      target: 'node',
+      compiler: 'tsc',
+      main: './src/main.ts',
+      tsConfig: './tsconfig.app.json',
+      assets: ['./src/assets'],
+      optimization: false,
+      outputHashing: 'none',
+    }),
+  ],
+  resolve: {
+    extensions: ['.ts', '.js', '.json'],
+  },
+  module: {
+    rules: [
+      {
+        test: /\.ts$/,
+        use: [
+          {
+            loader: 'ts-loader',
+            options: {
+              transpileOnly: true,
+            },
+          },
+        ],
+        exclude: /node_modules/,
+      },
+    ],
+  },
+  externals: [
+    function ({ request }, callback) {
+      if (/^class-validator\/.*/.test(request)) {
+        return callback(null, 'commonjs ' + request);
+      }
+      callback();
+    },
+  ],
+};

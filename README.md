@@ -1,7 +1,5 @@
 # RushHourServices
 
-Do the following to run the microservices
-```
 npm install
 npx nx test shared --testFile=game.service.spec.ts
 npx nx test cron --test-file=apps/cron/src/cleanup/cleanup.service.spec.ts
@@ -11,8 +9,14 @@ docker-compose build gateway
 docker-compose build api
 docker-compose build worker
 docker-compose build cron
+docker-compose run gateway
+docker-compose run api
+docker-compose run worker
+docker-compose run cron
 ```
-http://localhost:3001/docs
+http://localhost:3001/api
+http://localhost:15672/ RabbitMQ Management UI port
+http://localhost:8081/ Redis UI
 
 <a alt="Nx logo" href="https://nx.dev" target="_blank" rel="noreferrer"><img src="https://raw.githubusercontent.com/nrwl/nx/master/images/nx-logo.png" width="45"></a>
 

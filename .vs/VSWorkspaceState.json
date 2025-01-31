@@ -1,0 +1,10 @@
+{
+  "ExpandedNodes": [
+    "",
+    "\\shared",
+    "\\shared\\src",
+    "\\shared\\src\\modules"
+  ],
+  "SelectedNode": "\\shared\\src\\modules\\redis.module.ts",
+  "PreviewInSolutionExplorer": false
+}

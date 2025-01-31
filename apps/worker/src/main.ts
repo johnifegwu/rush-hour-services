@@ -1,9 +1,13 @@
-import { Logger } from '@nestjs/common';
+import { Logger, ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { WorkerModule } from './app.module';
 
 async function bootstrap() {
   const app = await NestFactory.create(WorkerModule);
+  app.useGlobalPipes(new ValidationPipe({
+    transform: true,
+    whitelist: true,
+  }));
   const globalPrefix = 'worker';
   app.setGlobalPrefix(globalPrefix);
   const port = process.env.PORT ?? 3005;

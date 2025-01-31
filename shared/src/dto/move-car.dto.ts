@@ -1,4 +1,4 @@
-import { IsEnum, IsNumber } from "class-validator/types/decorator/decorators";
+import { IsString, IsNumber, IsNotEmpty, Min, Max, IsEnum } from 'class-validator';
 import { MovementDirection } from "../interfaces/rush-hour.interface";
 
 export class MoveCarDto {

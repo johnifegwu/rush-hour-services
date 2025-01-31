@@ -3,6 +3,7 @@
   "$schema": "../../node_modules/nx/schemas/project-schema.json",
   "sourceRoot": "apps/api/src",
   "projectType": "application",
+  "tags": [],
   "targets": {
     "build": {
       "executor": "@nx/webpack:webpack",
@@ -19,15 +20,34 @@
         "assets": [
           "apps/api/src/assets"
         ],
-        "isolatedConfig": true,
+        "generatePackageJson": true,
         "webpackConfig": "apps/api/webpack.config.js"
       },
       "configurations": {
-        "development": {},
-        "production": {
+        "development": {
           "optimization": false,
+          "extractLicenses": false,
+          "inspect": false
+        },
+        "production": {
+          "optimization": true,
           "extractLicenses": true,
           "inspect": false
+        }
+      }
+    },
+    "serve": {
+      "executor": "@nx/js:node",
+      "defaultConfiguration": "development",
+      "options": {
+        "buildTarget": "api:build"
+      },
+      "configurations": {
+        "development": {
+          "buildTarget": "api:build:development"
+        },
+        "production": {
+          "buildTarget": "api:build:production"
         }
       }
     }

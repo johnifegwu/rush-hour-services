@@ -1,10 +1,14 @@
-import { Logger } from '@nestjs/common';
+import { Logger, ValidationPipe } from '@nestjs/common';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { NestFactory } from '@nestjs/core';
 import { ApiModule } from './api.module';
 
 async function bootstrap() {
   const app = await NestFactory.create(ApiModule);
+  app.useGlobalPipes(new ValidationPipe({
+    transform: true,
+    whitelist: true,
+  }));
   const config = new DocumentBuilder()
     .setTitle('Rush Hour Game API')
     .setDescription('API documentation for Rush Hour game services')

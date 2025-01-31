@@ -1,18 +1,22 @@
 import { Injectable } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { connect, Connection, Channel } from 'amqplib';
 
 @Injectable()
 export class RabbitMQService {
     private connection!: Connection;
     private channel!: Channel;
-    private port = process.env['RABBITMQ_PORT'] || 5672;
+
+    constructor(private configService: ConfigService,
+    ) { }
 
     async onModuleInit() {
         await this.init();
     }
 
     async init() {
-        this.connection = await connect(`amqp://rabbitmq:${this.port}`);
+        const constr = this.configService.get<string>('RABBITMQ_URI', 'amqp://rabbitmq:5672');
+        this.connection = await connect(constr);
         this.channel = await this.connection.createChannel();
         await this.channel.assertQueue('move_quality_queue', { durable: false });
         await this.channel.assertQueue('move-analysis', { durable: true });

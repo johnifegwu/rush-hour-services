@@ -6,26 +6,19 @@
     "types": [
       "node"
     ],
-    "experimentalDecorators": true,
     "emitDecoratorMetadata": true,
+    "experimentalDecorators": true,
     "target": "es2021",
     "strict": true,
-    "noImplicitAny": true,
-    "strictNullChecks": true,
-    "declaration": true,
-    "removeComments": true,
-    "allowSyntheticDefaultImports": true,
-    "sourceMap": true,
-    "baseUrl": "./",
-    "incremental": true,
-    "skipLibCheck": true
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true
   },
-  "include": [
-    "src/**/*.ts"
-  ],
   "exclude": [
     "jest.config.ts",
     "src/**/*.spec.ts",
     "src/**/*.test.ts"
+  ],
+  "include": [
+    "src/**/*.ts"
   ]
 }
