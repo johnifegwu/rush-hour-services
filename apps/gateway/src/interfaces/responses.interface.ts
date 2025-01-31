@@ -3,6 +3,13 @@ import { ApiProperty } from '@nestjs/swagger';
 import { MovementDirection, MoveQuality } from '../../../../shared/src/interfaces/rush-hour.interface';
 
 export class BoardResponse {
+    constructor() {
+        this.id = '';
+        this.matrix = [];
+        this.difficulty = '';
+        this.minimumMoves = 0;
+        this.createdAt = new Date();
+    }
     @ApiProperty()
     id: string;
 
@@ -36,6 +43,13 @@ export class BoardResponse {
 }
 
 export class GameMove {
+    constructor() {
+        this.carId = 0;
+        this.direction = MovementDirection.Right;
+        this.moveQuality = MoveQuality.GOOD;
+        this.minimumMovesAfter = 0;
+        this.timestamp = new Date();
+    }
     @ApiProperty({
         description: 'ID of the car being moved',
         example: 1,
@@ -65,6 +79,17 @@ export class GameMove {
 }
 
 export class GameResponse {
+    //Initialize fieleds in a constructor
+    constructor() {
+        this.id = '';
+        this.boardId = '';
+        this.currentState = [];
+        this.moves = [];
+        this.isSolved = false;
+        this.minimumMovesRequired = 0;
+        this.lastMoveAt = new Date();
+        this.createdAt = new Date();
+    }
     @ApiProperty()
     id: string;
 
