@@ -21,7 +21,7 @@ async function bootstrap() {
     })
   );
 
-  const port = process.env.PORT || 3000;
+  const port = process.env.GATEWAY_PORT || 3009;
   // Enable CORS
   app.enableCors();
 

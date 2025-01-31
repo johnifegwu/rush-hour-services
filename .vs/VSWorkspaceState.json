@@ -1,10 +1,14 @@
 {
   "ExpandedNodes": [
     "",
-    "\\shared",
+    "\\apps",
+    "\\apps\\cron\\src",
+    "\\apps\\cron\\src\\cleanup",
+    "\\apps\\worker",
+    "\\apps\\worker\\src",
     "\\shared\\src",
-    "\\shared\\src\\modules"
+    "\\shared\\src\\services"
   ],
-  "SelectedNode": "\\shared\\src\\modules\\redis.module.ts",
+  "SelectedNode": "\\apps\\worker\\src\\move-analysis.consumer.ts",
   "PreviewInSolutionExplorer": false
 }

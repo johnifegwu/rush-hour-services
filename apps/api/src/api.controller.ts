@@ -2,6 +2,7 @@ import {
     Controller, Get, Post, Body, Param, HttpException, HttpStatus, HttpCode,
     Query,
     Put,
+    Logger,
 } from '@nestjs/common';
 import { ApiService } from './api.service';
 import {
@@ -12,7 +13,7 @@ import {
     ApiBody,
     ApiQuery
 } from '@nestjs/swagger';
-import { CreateBoardDto, MoveCarDto } from '../../../shared/src/dto';
+import { CreateBoardDto, MoveCarDto, StartGameDto } from '../../../shared/src/dto';
 
 @ApiTags('Rush Hour Game')
 @Controller()
@@ -39,24 +40,23 @@ export class ApiController {
     @Post('start-game')
     @HttpCode(HttpStatus.CREATED)
     @ApiOperation({ summary: 'Start a new game' })
-    @ApiBody({
-        schema: {
-            type: 'object',
-            properties: {
-                boardId: { type: 'string' }
-            }
-        }
-    })
+    @ApiBody({ type: StartGameDto })
     @ApiResponse({ status: 200, description: 'Game successfully started' })
     @ApiResponse({ status: 400, description: 'Failed to start game' })
     async startGameEndPoint(
-        @Body() data: { boardId: string }
+        @Body() data: StartGameDto
     ) {
         try {
+            Logger.log(
+                `Starting game with boardId ${data.boardId}`
+            );
             return await this.apiService.startGame(data.boardId);
         } catch (error) {
+            Logger.log(
+                `Starting game with boardId ${data.boardId} failed: ${error}`
+            );
             throw new HttpException(
-                'Failed to start game',
+                `Failed to start game:${error}`,
                 HttpStatus.BAD_REQUEST
             );
         }
@@ -95,6 +95,9 @@ export class ApiController {
                 direction: moveCarDto.direction,
             });
         } catch (error) {
+            Logger.log(
+                `Error starting game ${error}`
+            );
             throw new HttpException(
                 'Invalid move',
                 HttpStatus.BAD_REQUEST
@@ -111,6 +114,9 @@ export class ApiController {
         try {
             return await this.apiService.getGame(gameId);
         } catch (error) {
+            Logger.log(
+                `Error getting valid moves ${error}`
+            );
             throw new HttpException(
                 'Move not found',
                 HttpStatus.NOT_FOUND
@@ -127,7 +133,17 @@ export class ApiController {
     })
     @ApiResponse({ status: 200, description: 'Boards retrieved successfully' })
     async getBoardsEndPoint(@Query('difficulty') difficulty?: string) {
-        return this.apiService.getBoards(difficulty);
+        try {
+            return await this.apiService.getBoards(difficulty);
+        } catch (error) {
+            Logger.log(
+                `Error getting boards ${error}`
+            );
+            throw new HttpException(
+                'Boards not found',
+                HttpStatus.NOT_FOUND
+            );
+        }
     }
 
     @Get('boards/:boardId')
@@ -135,7 +151,17 @@ export class ApiController {
     @ApiParam({ name: 'boardId', description: 'ID of the board' })
     @ApiResponse({ status: 200, description: 'Board details retrieved successfully' })
     async getBoardEndPoint(@Param('boardId') boardId: string) {
-        return this.apiService.getBoard(boardId);
+        try {
+            return await this.apiService.getBoard(boardId);
+        } catch (error) {
+            Logger.log(
+                `Error getting boards ${error}`
+            );
+            throw new HttpException(
+                'Boards not found',
+                HttpStatus.NOT_FOUND
+            );
+        }
     }
 
     @Get(':gameId/hint')
@@ -143,7 +169,17 @@ export class ApiController {
     @ApiParam({ name: 'gameId', description: 'ID of the game' })
     @ApiResponse({ status: 200, description: 'Hint retrieved successfully' })
     async getHintEndPoint(@Param('gameId') gameId: string) {
-        return this.apiService.getHint(gameId);
+        try {
+            return await this.apiService.getHint(gameId);
+        } catch (error) {
+            Logger.log(
+                `Error getting hints ${error}`
+            );
+            throw new HttpException(
+                'Hints not found',
+                HttpStatus.NOT_FOUND
+            );
+        }
     }
 
     @Get(':gameId/solution')
@@ -151,7 +187,17 @@ export class ApiController {
     @ApiParam({ name: 'gameId', description: 'ID of the game' })
     @ApiResponse({ status: 200, description: 'Solution retrieved successfully' })
     async getSolutionEndPoint(@Param('gameId') gameId: string) {
-        return this.apiService.getSolution(gameId);
+        try {
+            return await this.apiService.getSolution(gameId);
+        } catch (error) {
+            Logger.log(
+                `Error getting solutions ${error}`
+            );
+            throw new HttpException(
+                'Solutions not found',
+                HttpStatus.NOT_FOUND
+            );
+        }
     }
 
     @Put(':gameId/create-analysis')
@@ -159,7 +205,17 @@ export class ApiController {
     @ApiParam({ name: 'gameId', description: 'ID of the game' })
     @ApiResponse({ status: 200, description: 'Analysis created successfully' })
     async CreateAnalysisEndPoint(@Param('gameId') gameId: string) {
-        return this.apiService.createAnalysis(gameId);
+        try {
+            return await this.apiService.createAnalysis(gameId);
+        } catch (error) {
+            Logger.log(
+                `Error creating analysis ${error}`
+            );
+            throw new HttpException(
+                'Create Analysis failed',
+                HttpStatus.BAD_REQUEST
+            );
+        }
     }
 
     @Get(':gameId/analysis')
@@ -167,7 +223,17 @@ export class ApiController {
     @ApiParam({ name: 'gameId', description: 'ID of the game' })
     @ApiResponse({ status: 200, description: 'Analysis retrieved successfully' })
     async getAnalysisEndPoint(@Param('gameId') gameId: string) {
-        return this.apiService.getAnalysis(gameId);
+        try {
+            return await this.apiService.getAnalysis(gameId);
+        } catch (error) {
+            Logger.log(
+                `Error getting analysis ${error}`
+            );
+            throw new HttpException(
+                'Analysis not found',
+                HttpStatus.NOT_FOUND
+            );
+        }
     }
 
     @Post(':gameId/abandon')
@@ -175,7 +241,17 @@ export class ApiController {
     @ApiParam({ name: 'gameId', description: 'ID of the game' })
     @ApiResponse({ status: 200, description: 'Game abandoned successfully' })
     async abandonGameEndPoint(@Param('gameId') gameId: string) {
-        return this.apiService.abandonGame(gameId);
+        try {
+            return await this.apiService.abandonGame(gameId);
+        } catch (error) {
+            Logger.log(
+                `Error abandoning game ${error}`
+            );
+            throw new HttpException(
+                'Abandon game failed',
+                HttpStatus.BAD_REQUEST
+            );
+        }
     }
 
     @Get('leaderboard')
@@ -187,6 +263,16 @@ export class ApiController {
     })
     @ApiResponse({ status: 200, description: 'Leaderboard retrieved successfully' })
     async getLeaderboardEndPoint(@Query('timeFrame') timeFrame: string) {
-        return this.apiService.getLeaderboard(timeFrame);
+        try {
+            return await this.apiService.getLeaderboard(timeFrame);
+        } catch (error) {
+            Logger.log(
+                `Error getting Leaderboard ${error}`
+            );
+            throw new HttpException(
+                'Leaderboard not found',
+                HttpStatus.NOT_FOUND
+            );
+        }
     }
 }

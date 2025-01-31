@@ -1,22 +1,47 @@
 # RushHourServices
 
+![alt text](image.png)
+
+
+```
+npm install --legacy-peer-deps
+
 npm install
 npx nx test shared --testFile=game.service.spec.ts
 npx nx test cron --test-file=apps/cron/src/cleanup/cleanup.service.spec.ts
 npx nx test worker --test-file=apps/worker/src/move-analysis.consumer.spec.ts
 npx nx test worker --test-file=apps/worker/src/move-quality.consumer.spec.ts
-docker-compose build gateway
-docker-compose build api
-docker-compose build worker
-docker-compose build cron
-docker-compose run gateway
-docker-compose run api
-docker-compose run worker
-docker-compose run cron
+
+docker-compose up -d --build api
+docker-compose up -d --build worker
+docker-compose up -d --build cron
+ 
 ```
-http://localhost:3001/api
+http://localhost:3001/docs
 http://localhost:15672/ RabbitMQ Management UI port
 http://localhost:8081/ Redis UI
+
+Sample Board:
+```
+{
+  "matrix": [
+    [0, 0, 0, 0, 0, 0],
+    [0, 2, 1, 1, 0, 0],    // Target car (1) horizontal in middle
+    [0, 2, 3, 3, 4, 0],
+    [0, 2, 0, 0, 4, 0],
+    [5, 5, 0, 6, 4, 0],
+    [0, 7, 7, 6, 0, 0]
+  ]
+}
+```
+
+Car Movement Sample:
+```
+{
+    "carId": 4,
+    "direction": "Up"
+}
+```
 
 <a alt="Nx logo" href="https://nx.dev" target="_blank" rel="noreferrer"><img src="https://raw.githubusercontent.com/nrwl/nx/master/images/nx-logo.png" width="45"></a>
 

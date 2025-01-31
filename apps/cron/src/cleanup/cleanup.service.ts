@@ -70,6 +70,7 @@ export class CleanupService {
         return summary;
     }
 
+
     getCleanupSummary(limit?: number): CleanupSummary[] {
         return limit
             ? this.cleanupHistory.slice(-limit)

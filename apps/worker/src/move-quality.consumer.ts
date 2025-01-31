@@ -4,6 +4,7 @@ import { GameService } from '../../../shared/src/services';
 import { ConfigService } from '@nestjs/config';
 import { exponentialBackoff } from '../../../shared/src/utils/retry';
 import { MoveCarDto } from '../../../shared/src/dto/move-car.dto';
+import { RABBITMQ_QUEUE } from '../../../shared/src/constants/rabbitmq.constants';
 
 interface MoveQualityMessage {
     gameId: string;
@@ -16,7 +17,9 @@ export class MoveQualityConsumer implements OnModuleInit, OnModuleDestroy {
     private channel: Channel | null = null;
     private readonly logger = new Logger(MoveQualityConsumer.name);
     private readonly maxRetries = 3;
-    private readonly queueName = 'move_quality_queue';
+    private readonly queueName = RABBITMQ_QUEUE.MOVE_QUALITY;
+    private readonly dlxName = 'move-quality.dlx'; // Changed from 'move-quality-queue.dlx'
+    private readonly dlqName = 'move-quality.dlq'; // Changed for consistency
 
     constructor(
         private readonly gameService: GameService,
@@ -33,19 +36,29 @@ export class MoveQualityConsumer implements OnModuleInit, OnModuleDestroy {
 
     private async setupConnection(): Promise<void> {
         try {
-            const rabbitmqUrl = this.configService.get<string>('RABBITMQ_URL') || 'amqp://rabbitmq:5672';
+            const rabbitmqUrl = this.configService.get<string>('RABBITMQ_URI', 'amqp://rabbitmq:5672');
             this.connection = await this.connectWithRetry(rabbitmqUrl);
             this.channel = await this.connection.createChannel();
 
-            // Make queue durable and enable message persistence
-            await this.channel.assertQueue(this.queueName, {
-                durable: true,
-                deadLetterExchange: 'dlx',
-                deadLetterRoutingKey: `${this.queueName}.dlq`
-            });
+            // Setup Dead Letter Exchange
+            await this.channel.assertExchange(this.dlxName, 'fanout', { durable: true });
 
             // Setup Dead Letter Queue
-            await this.setupDeadLetterQueue();
+            await this.channel.assertQueue(this.dlqName, {
+                durable: true
+            });
+
+            // Bind DLQ to DLX
+            await this.channel.bindQueue(this.dlqName, this.dlxName, '');
+
+            // Setup main queue with DLX configuration
+            await this.channel.assertQueue(this.queueName, {
+                durable: true,
+                arguments: {
+                    'x-dead-letter-exchange': this.dlxName,
+                    // Remove'x-dead-letter-routing-key': ''
+                }
+            });
 
             // Prefetch for better load balancing
             await this.channel.prefetch(1);
@@ -69,18 +82,6 @@ export class MoveQualityConsumer implements OnModuleInit, OnModuleDestroy {
                 initialDelay: 1000,
                 maxDelay: 10000,
             }
-        );
-    }
-
-    private async setupDeadLetterQueue(): Promise<void> {
-        if (!this.channel) return;
-
-        await this.channel.assertExchange('dlx', 'direct', { durable: true });
-        await this.channel.assertQueue(`${this.queueName}.dlq`, { durable: true });
-        await this.channel.bindQueue(
-            `${this.queueName}.dlq`,
-            'dlx',
-            `${this.queueName}.dlq`
         );
     }
 
@@ -116,7 +117,7 @@ export class MoveQualityConsumer implements OnModuleInit, OnModuleDestroy {
             await this.processMessageWithRetry(moveData, msg);
         } catch (error) {
             this.logger.error('Error processing message:', error);
-            // Send to Dead Letter Queue after max retries
+            // Reject the message and send to DLQ
             this.channel.reject(msg, false);
         }
     }
@@ -142,7 +143,9 @@ export class MoveQualityConsumer implements OnModuleInit, OnModuleDestroy {
                     moveData.move
                 );
 
-                this.channel?.ack(msg);
+                if (this.channel) {
+                    this.channel.ack(msg);
+                }
                 return;
             } catch (error) {
                 attempts++;

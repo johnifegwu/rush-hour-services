@@ -65,14 +65,14 @@ services:
     container_name: gateway
     restart: always
     ports:
-      - "3000:3000"
+      - "3009:3009"
     depends_on:
       - mongodb
       - redis
       - rabbitmq
       - redis-commander
     environment:
-      - PORT=3000
+      - PORT=3009
       - MONGO_URI=mongodb://${MONGO_USERNAME}:${MONGO_PASSWORD}@mongodb:${MONGOBD_PORT}
       - REDIS_URI=redis://redis:${REDIS_PORT}
       - RABBITMQ_URI=amqp://${RABBITMQ_USER}:${RABBITMQ_PASSWORD}@rabbitmq:${RABBITMQ_PORT}
@@ -85,15 +85,20 @@ services:
       dockerfile: ${DOCKERFILE:-apps/api/Dockerfile}
     container_name: api
     restart: always
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:3000/health" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
     ports:
-      - "3001:3001"
+      - "3000:3000"
     depends_on:
       - mongodb
       - redis
       - rabbitmq
       - redis-commander
     environment:
-      - PORT=3001
+      - PORT=3000
       - MONGO_URI=mongodb://${MONGO_USERNAME}:${MONGO_PASSWORD}@mongodb:${MONGOBD_PORT}
       - REDIS_URI=redis://redis:${REDIS_PORT}
       - RABBITMQ_URI=amqp://${RABBITMQ_USER}:${RABBITMQ_PASSWORD}@rabbitmq:${RABBITMQ_PORT}

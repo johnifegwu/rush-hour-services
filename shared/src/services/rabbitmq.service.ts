@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { connect, Connection, Channel } from 'amqplib';
+import { RABBITMQ_QUEUE } from '../../../shared/src/constants/rabbitmq.constants';
 
 @Injectable()
 export class RabbitMQService {
@@ -18,8 +19,32 @@ export class RabbitMQService {
         const constr = this.configService.get<string>('RABBITMQ_URI', 'amqp://rabbitmq:5672');
         this.connection = await connect(constr);
         this.channel = await this.connection.createChannel();
-        await this.channel.assertQueue('move_quality_queue', { durable: false });
-        await this.channel.assertQueue('move-analysis', { durable: true });
+        // First, declare the dead letter exchanges
+        await this.channel.assertExchange('move-quality.dlx', 'fanout', { durable: true });
+        await this.channel.assertExchange('move-analysis.dlx', 'fanout', { durable: true });
+
+        // Declare dead letter queues
+        await this.channel.assertQueue('move-quality.dlq', { durable: true });
+        await this.channel.assertQueue('move-analysis.dlq', { durable: true });
+
+        // Bind dead letter queues to their exchanges
+        await this.channel.bindQueue('move-quality.dlq', 'move-quality.dlx', '');
+        await this.channel.bindQueue('move-analysis.dlq', 'move-analysis.dlx', '');
+
+        // Declare main queues with dead letter configuration
+        await this.channel.assertQueue(RABBITMQ_QUEUE.MOVE_QUALITY, {
+            durable: true,
+            arguments: {
+                'x-dead-letter-exchange': 'move-quality.dlx'
+            }
+        });
+
+        await this.channel.assertQueue(RABBITMQ_QUEUE.MOVE_ANALYSIS, {
+            durable: true,
+            arguments: {
+                'x-dead-letter-exchange': 'move-analysis.dlx'
+            }
+        });
     }
 
     async publishMoveEvent(moveData: any) {
@@ -27,7 +52,7 @@ export class RabbitMQService {
             await this.init();
         }
         this.channel.sendToQueue(
-            'move_quality_queue',
+            RABBITMQ_QUEUE.MOVE_QUALITY,
             Buffer.from(JSON.stringify(moveData))
         );
     }
@@ -37,7 +62,7 @@ export class RabbitMQService {
             await this.init();
         }
         this.channel.sendToQueue(
-            'move-analysis',
+            RABBITMQ_QUEUE.MOVE_ANALYSIS,
             Buffer.from(JSON.stringify({ gameId, board, move }))
         );
     }
@@ -51,30 +76,18 @@ export class RabbitMQService {
     }
 
     async consume(queueName: string, callback: (message: any) => Promise<void>): Promise<void> {
-        // Set prefetch to 1 to ensure fair distribution of messages
         await this.channel.prefetch(1);
 
-        // Assert the queue exists
-        await this.channel.assertQueue(queueName, { durable: true });
-
-        // Set up the consumer
         await this.channel.consume(queueName, async (message) => {
             if (message) {
                 try {
-                    // Parse the message content
                     const content = JSON.parse(message.content.toString());
-
-                    // Execute the callback with the message content
                     await callback(content);
-
-                    // Acknowledge the message after successful processing
                     this.channel.ack(message);
                 } catch (error) {
-                    // If there's an error processing the message
                     console.error('Error processing message:', error);
-
-                    // Reject the message and requeue it
-                    this.channel.nack(message, false, true);
+                    // Reject the message without requeuing
+                    this.channel.reject(message, false);
                 }
             }
         });

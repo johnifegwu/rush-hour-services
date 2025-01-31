@@ -18,7 +18,7 @@ import { GameService } from '../../../shared/src/services/game.service';
         MongooseModule.forRootAsync({
             imports: [ConfigModule],
             useFactory: async (configService: ConfigService) => ({
-                uri: configService.get<string>('MONGODB_URI', 'mongodb://mongodb:27017'),
+                uri: configService.get<string>('MONGO_URI', 'mongodb://mongodb:27017'),
                 useNewUrlParser: true,
                 useUnifiedTopology: true,
             }),

@@ -1,12 +1,13 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
+import { Model, Types } from 'mongoose';
 import { Board, Game } from '../schemas';
 import { MoveCarDto } from '../dto/move-car.dto';
 import { RedisService } from './redis.service';
 import { RabbitMQService } from './rabbitmq.service';
 import { BadRequestException, NotFoundException } from '../exceptions';
 import { AnalysisResult, GameMove, MovementDirection, MoveQuality, Step } from '../interfaces/rush-hour.interface';
+import { RABBITMQ_QUEUE } from '../constants/rabbitmq.constants';
 
 type Position = [number, number];
 
@@ -113,22 +114,68 @@ export class GameService {
     }
 
     async startGame(boardId: string) {
-        const board = await this.boardModel.findById(boardId);
-        if (!board) throw new Error('Board not found');
+        const board = await this.getBoard(boardId);
+        this.validateBoard(board);
 
+        // Validate board ID format if using MongoDB ObjectId
+        if (!Types.ObjectId.isValid(boardId)) {
+            throw new BadRequestException('Invalid board ID format');
+        }
+
+        const initialState = this.initializeGameState(board);
+        // Calculate minimum moves required for the initial state
+        const minimumMovesRequired = await this.calculateMinimumMoves(board.matrix, boardId);
         const game = await this.gameModel.create({
             boardId,
-            currentState: board.matrix,
+            currentState: initialState,
             moves: [],
             lastMoveAt: new Date(),
-            isSolved: false
+            isSolved: false,
+            minimumMovesRequired
         });
 
-        //Save to redis
-        this.redisService.setGame(game.id, game);
+        Logger.log(
+            `Game created$, saving game to redis: ${game}`
+        );
+
+        // Save to redis with proper error handling
+        try {
+            await this.redisService.setGame(game.id, game);
+        } catch (error) {
+            // Handle Redis errors
+            Logger.error(`Failed to cache game in Redis: ${error}`);
+            // Delete the MongoDB record if Redis fails
+            await this.gameModel.findByIdAndDelete(game.id);
+            throw new Error('Failed to initialize game');
+        }
 
         return game;
     }
+
+    private initializeGameState(board: Board): number[][] {
+        // Deep copy the board matrix to avoid reference issues
+        return JSON.parse(JSON.stringify(board.matrix));
+    }
+
+    private validateBoard(board: Board) {
+        // Check board dimensions
+        if (board.matrix.length > this.MAX_BOARD_SIZE ||
+            board.matrix[0].length > this.MAX_BOARD_SIZE) {
+            throw new BadRequestException('Board size exceeds maximum allowed dimensions');
+        }
+
+        // Check for target car (usually car ID 1)
+        if (!board.matrix.some(row => row.includes(1))) {
+            throw new BadRequestException('Board must contain target car (ID: 1)');
+        }
+
+        // Validate matrix structure
+        const width = board.matrix[0].length;
+        if (!board.matrix.every(row => row.length === width)) {
+            throw new BadRequestException('Board matrix must be rectangular');
+        }
+    }
+
 
     async getGame(gameId: string): Promise<Game> {
         //Look for game in redis

@@ -7,11 +7,11 @@ export class ApiService {
     constructor(private readonly gameService: GameService) { }
 
     async moveCar(gameId: string, moveCarDto: MoveCarDto) {
-        return this.gameService.moveCar(gameId, moveCarDto);
+        return await this.gameService.moveCar(gameId, moveCarDto);
     }
 
     async getMoveCar(gameId: string) {
-        return this.gameService.getMoveCarResult(gameId);
+        return await this.gameService.getMoveCarResult(gameId);
     }
 
     async createBoard(createBoardDto: CreateBoardDto) {
@@ -19,42 +19,42 @@ export class ApiService {
     }
 
     async startGame(boardId: string) {
-        return this.gameService.startGame(boardId);
+        return await this.gameService.startGame(boardId);
     }
 
     async getGame(gameId: string) {
-        return this.gameService.getGame(gameId);
+        return await this.gameService.getGame(gameId);
     }
 
     async getBoards(difficulty?: string) {
-        return this.gameService.getBoards(difficulty);
+        return await this.gameService.getBoards(difficulty);
     }
 
     async getBoard(boardId: string) {
-        return this.gameService.getBoard(boardId);
+        return await this.gameService.getBoard(boardId);
     }
 
     async getHint(gameId: string) {
-        return this.gameService.getHint(gameId);
+        return await this.gameService.getHint(gameId);
     }
 
     async getSolution(gameId: string) {
-        return this.gameService.getSolution(gameId);
+        return await this.gameService.getSolution(gameId);
     }
 
     async createAnalysis(gameId: string) {
-        return this.gameService.createAnalysis(gameId);
+        return await this.gameService.createAnalysis(gameId);
     }
 
     async getAnalysis(gameId: string) {
-        return this.gameService.getAnalysis(gameId);
+        return await this.gameService.getAnalysis(gameId);
     }
 
     async abandonGame(gameId: string) {
-        return this.gameService.abandonGame(gameId);
+        return await this.gameService.abandonGame(gameId);
     }
 
     async getLeaderboard(timeFrame: string) {
-        return this.gameService.getLeaderboard(timeFrame);
+        return await this.gameService.getLeaderboard(timeFrame);
     }
 }

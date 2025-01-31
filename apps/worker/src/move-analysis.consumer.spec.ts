@@ -5,6 +5,7 @@ import { MoveAnalysisConsumer } from './move-analysis.consumer';
 import { GameService } from '../../../shared/src/services/game.service';
 import { Connection, Channel, connect } from 'amqplib';
 import { TestResults } from './interfaces/test-results.interface';
+import { RABBITMQ_QUEUE } from '../../../shared/src/constants/rabbitmq.constants';
 
 // Mock implementations
 jest.mock('amqplib');
@@ -104,7 +105,7 @@ describe('MoveAnalysisConsumer', () => {
         await runTest('Channel topology setup test', async () => {
             await consumer.onModuleInit();
             expect(mockChannel.assertExchange).toHaveBeenCalledWith('moves', 'topic', expect.any(Object));
-            expect(mockChannel.assertQueue).toHaveBeenCalledWith('move-analysis-queue', expect.any(Object));
+            expect(mockChannel.assertQueue).toHaveBeenCalledWith(RABBITMQ_QUEUE.MOVE_ANALYSIS, expect.any(Object));
             expect(mockChannel.bindQueue).toHaveBeenCalled();
         });
     });
@@ -120,7 +121,7 @@ describe('MoveAnalysisConsumer', () => {
 
             await consumer.onModuleInit();
             const consumeCallback = mockChannel.consume.mock.calls[0][1];
-            await consumeCallback(mockMessage as any);
+            consumeCallback(mockMessage as any);
 
             expect(gameService.createAnalysisFromWorker).toHaveBeenCalledWith('123');
             expect(mockChannel.ack).toHaveBeenCalled();
@@ -138,7 +139,7 @@ describe('MoveAnalysisConsumer', () => {
 
             await consumer.onModuleInit();
             const consumeCallback = mockChannel.consume.mock.calls[0][1];
-            await consumeCallback(mockMessage as any);
+            consumeCallback(mockMessage as any);
 
             expect(gameService.createAnalysisFromWorker).not.toHaveBeenCalled();
             expect(mockChannel.ack).toHaveBeenCalled();

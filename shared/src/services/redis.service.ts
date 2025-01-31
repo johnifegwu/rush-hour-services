@@ -13,6 +13,7 @@ export class RedisService {
         const url = new URL(this.configService.get<string>('REDIS_URI', 'redis://redis:6379'));
         console.log('Redis URL:', url);
 
+
         this.client = new Redis({
             host: url.hostname,
             port: parseInt(url.port, 10) || 6379,
