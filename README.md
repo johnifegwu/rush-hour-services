@@ -1,4 +1,91 @@
 # RushHourServices
+  Rush Hour Services - Technical Stack Overview body { font-family: Arial, sans-serif; line-height: 1.6; max-width: 800px; margin: 0 auto; padding: 20px; } h1 { color: #2c3e50; border-bottom: 2px solid #3498db; padding-bottom: 10px; } h2 { color: #34495e; margin-top: 20px; } .tech-section { margin-bottom: 20px; padding: 10px; background-color: #f8f9fa; border-radius: 5px; } ul { list-style-type: none; padding-left: 20px; } li { margin-bottom: 5px; } li:before { content: "•"; color: #3498db; font-weight: bold; display: inline-block; width: 1em; margin-left: -1em; }
+
+Rush Hour Services - Technical Stack Overview
+=============================================
+
+Core Framework & Runtime
+------------------------
+
+*   NestJS (TypeScript-based Node.js framework)
+*   TypeScript
+*   Node.js
+
+API & Documentation
+-------------------
+
+*   OpenAPI/Swagger for API documentation
+*   REST API endpoints
+*   API versioning
+*   CORS enabled
+
+Database & Caching
+------------------
+
+*   MongoDB (with Mongoose ODM)
+*   Redis for caching
+
+Message Queue
+-------------
+
+*   RabbitMQ for asynchronous processing
+
+Security & Performance
+----------------------
+
+*   Helmet for security headers
+*   Compression middleware
+*   CORS configuration
+*   Validation Pipes for request validation
+*   Environment-based configuration
+
+Architecture
+------------
+
+*   Microservices Architecture with:
+    *   API Service
+    *   Gateway Service
+    *   Worker Service
+    *   Cron Service
+*   Service Discovery
+*   Load Balancing
+
+Testing
+-------
+
+*   Jest for unit testing
+*   E2E testing support
+*   Test setup configurations
+
+DevOps & Infrastructure
+-----------------------
+
+*   Docker containerization
+*   Multiple service ports configuration:
+    *   Gateway: 3009
+    *   API: 3000
+*   Environment-based configurations
+
+Code Quality & Standards
+------------------------
+
+*   Strong typing with TypeScript
+*   DTO (Data Transfer Objects) patterns
+*   Exception handling
+*   Logging system
+*   Input validation
+*   Clean architecture principles
+
+Features Implemented
+--------------------
+
+*   Game state management
+*   Leaderboard system
+*   Real-time game analysis
+*   Move validation
+*   Solution hints
+*   Game abandonment handling
+*   Performance analytics
 
 ![alt text](image.png)
 
@@ -43,6 +130,8 @@ Car Movement Sample:
     "direction": "Up"
 }
 ```
+
+
 ![rush-hour-03](https://github.com/user-attachments/assets/ac6cb223-1242-4cb2-9f7e-44118a581130)
 
 <a alt="Nx logo" href="https://nx.dev" target="_blank" rel="noreferrer"><img src="https://raw.githubusercontent.com/nrwl/nx/master/images/nx-logo.png" width="45"></a>
