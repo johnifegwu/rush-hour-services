@@ -1,5 +1,4 @@
 # RushHourServices
-  Rush Hour Services - Technical Stack Overview body { font-family: Arial, sans-serif; line-height: 1.6; max-width: 800px; margin: 0 auto; padding: 20px; } h1 { color: #2c3e50; border-bottom: 2px solid #3498db; padding-bottom: 10px; } h2 { color: #34495e; margin-top: 20px; } .tech-section { margin-bottom: 20px; padding: 10px; background-color: #f8f9fa; border-radius: 5px; } ul { list-style-type: none; padding-left: 20px; } li { margin-bottom: 5px; } li:before { content: "•"; color: #3498db; font-weight: bold; display: inline-block; width: 1em; margin-left: -1em; }
 
 Rush Hour Services - Technical Stack Overview
 =============================================
