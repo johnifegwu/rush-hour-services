@@ -1,5 +1,7 @@
 # RushHourServices
 
+Auto (John Ifegwu)
+
 Rush Hour Services - Technical Stack Overview
 =============================================
 
