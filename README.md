@@ -1,6 +1,7 @@
 # RushHourServices
 
-Auto (John Ifegwu)
+Aurthor   (John Ifegwu)
+Developer (John Ifegwu)
 
 Rush Hour Services - Technical Stack Overview
 =============================================
