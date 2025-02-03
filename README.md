@@ -18,7 +18,7 @@ docker-compose up -d --build worker
 docker-compose up -d --build cron
  
 ```
-http://localhost:3001/docs
+http://localhost:3000/docs
 http://localhost:15672/ RabbitMQ Management UI port
 http://localhost:8081/ Redis UI
 
