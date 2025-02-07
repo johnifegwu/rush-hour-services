@@ -188,10 +188,15 @@ export class GameService {
         return game as Game;
     }
 
+    // Update game to redis as well as the database
     private async updateGame(gameId: string, game: Game) {
-        //Update game to redis as games are archived to the database 
-        // when completed or inactive.
-        this.redisService.setGame(gameId, game);
+        // Update game to redis
+        await this.redisService.setGame(gameId, game);
+
+        // Update game to database
+        await this.gameModel.findByIdAndUpdate(gameId, game);
+
+        // Return game
         return game;
     }
 
