@@ -8,6 +8,8 @@ import { RabbitMQService } from './rabbitmq.service';
 import { BadRequestException, NotFoundException } from '../exceptions';
 import { AnalysisResult, GameMove, MovementDirection, MoveQuality, Step } from '../interfaces/rush-hour.interface';
 import { RABBITMQ_QUEUE } from '../constants/rabbitmq.constants';
+import { IGameRepository } from '../interfaces/game-repository.interface';
+import { IBoardRepository } from '../interfaces/board-repository.interface';
 
 type Position = [number, number];
 
@@ -103,14 +105,14 @@ export class GameService {
     private readonly MAX_SEARCH_STATES = 100000;
     private readonly PARALLEL_CHUNK_SIZE = 1000;
     constructor(
-        @InjectModel(Board.name) private readonly boardModel: Model<Board>,
-        @InjectModel(Game.name) private readonly gameModel: Model<Game>,
+        private readonly gameRepository: IGameRepository,
+        private readonly boardRepository: IBoardRepository,
         private readonly redisService: RedisService,
         private readonly rabbitMQService: RabbitMQService,
     ) { }
 
     async createBoard(matrix: number[][]) {
-        return await this.boardModel.create({ matrix });
+        return await this.boardRepository.create({ matrix });
     }
 
     async startGame(boardId: string) {
@@ -125,7 +127,7 @@ export class GameService {
         const initialState = this.initializeGameState(board);
         // Calculate minimum moves required for the initial state
         const minimumMovesRequired = await this.calculateMinimumMoves(board.matrix, boardId);
-        const game = await this.gameModel.create({
+        const game = await this.gameRepository.create({
             boardId,
             currentState: initialState,
             moves: [],
@@ -145,7 +147,7 @@ export class GameService {
             // Handle Redis errors
             Logger.error(`Failed to cache game in Redis: ${error}`);
             // Delete the MongoDB record if Redis fails
-            await this.gameModel.findByIdAndDelete(game.id);
+            await this.gameRepository.delete(game.id);
             throw new Error('Failed to initialize game');
         }
 
@@ -194,7 +196,7 @@ export class GameService {
         await this.redisService.setGame(gameId, game);
 
         // Update game to database
-        await this.gameModel.findByIdAndUpdate(gameId, game);
+        await this.gameRepository.update(gameId, game);
 
         // Return game
         return game;
@@ -202,7 +204,7 @@ export class GameService {
 
     async getBoards(difficulty?: string): Promise<Board[]> {
         try {
-            const boards = await this.boardModel.find().exec();
+            const boards = await this.boardRepository.findAll();
 
             if (difficulty) {
                 return boards.filter(async board => await this.getBoardDifficulty(board) === difficulty);
@@ -219,7 +221,7 @@ export class GameService {
     }
 
     async getBoard(boardId: string): Promise<Board> {
-        const board = await this.boardModel.findById(boardId).exec();
+        const board = await this.boardRepository.findById(boardId);
 
         if (!board) {
             throw new NotFoundException(`Board with ID ${boardId} not found`);
@@ -525,10 +527,10 @@ export class GameService {
     }[]> {
         const startDate = this.getTimeFrameDate(timeFrame);
 
-        const games = await this.gameModel.find({
+        const games = await this.gameRepository.findByIsSolvedAndLastMove({
             isSolved: true,
             lastMoveAt: { $gte: startDate }
-        }).exec();
+        });
 
         const leaderboardEntries = games.map(game => ({
             gameId: game.id,

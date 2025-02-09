@@ -1,8 +1,9 @@
-// apps/worker/src/worker.module.ts
+
 import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
 import { RabbitMQModule } from '../../../shared/src/modules/rabbitmq.module';
 import { RedisModule } from '../../../shared/src/modules/redis.module';
+import { GameModule } from '../../../shared/src/modules/game.module';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { MoveAnalysisConsumer } from './move-analysis.consumer';
 import { MoveQualityConsumer } from './move-quality.consumer';
@@ -29,7 +30,8 @@ import { GameService } from '../../../shared/src/services/game.service';
             { name: Game.name, schema: GameSchema }
         ]),
         RabbitMQModule,
-        RedisModule
+        RedisModule,
+        GameModule
     ],
     providers: [MoveAnalysisConsumer, MoveQualityConsumer,
         GameService,

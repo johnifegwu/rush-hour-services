@@ -1,9 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { InjectModel } from '@nestjs/mongoose';
 import { Cron, CronExpression } from '@nestjs/schedule';
-import { Model } from 'mongoose';
-import { Game } from '../../../../shared/src/schemas/game.schema';
 import { RedisService } from '../../../../shared/src/services/redis.service';
+import { IGameRepository } from '../../../../shared/src/interfaces/game-repository.interface';
 
 export interface CleanupSummary {
     timestamp: Date;
@@ -19,7 +17,7 @@ export class CleanupService {
     private cleanupHistory: CleanupSummary[] = [];
 
     constructor(
-        @InjectModel(Game.name) private readonly gameModel: Model<Game>,
+        private readonly gameRepository: IGameRepository,
         private readonly redisService: RedisService
     ) { }
 
@@ -36,7 +34,8 @@ export class CleanupService {
             const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
 
             // Get inactive games
-            const games = await this.gameModel.find({
+            const games = await this.gameRepository.findByLastMove({
+                isSolved: false, // isSolved is actualy not needed
                 lastMoveAt: { $lte: fiveMinutesAgo },
             });
 
@@ -46,7 +45,8 @@ export class CleanupService {
             );
 
             // Delete from database
-            const deleteResult = await this.gameModel.deleteMany({
+            const deleteResult = await this.gameRepository.deleteByLastMove({
+                isSolved: false, // isSolved is actualy not needed
                 lastMoveAt: { $lte: fiveMinutesAgo },
             });
 

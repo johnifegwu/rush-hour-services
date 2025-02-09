@@ -4,6 +4,7 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { CacheModule } from '@nestjs/cache-manager';
 import { ApiController } from './api.controller';
 import { ApiService } from './api.service';
+import { GameModule } from '../../../shared/src/modules/game.module';
 import { RabbitMQModule } from '../../../shared/src/modules/rabbitmq.module';
 import { RedisModule } from '../../../shared/src/modules/redis.module';
 import { GameService } from '../../../shared/src/services';
@@ -29,7 +30,7 @@ import { Board, BoardSchema, Game, GameSchema } from '../../../shared/src/schema
             ttl: 300, // 5 minutes
             max: 10000 // maximum number of items in cache
         }),
-        RedisModule, RabbitMQModule,
+        RedisModule, RabbitMQModule, GameModule
     ],
     controllers: [ApiController],
     providers: [ApiService, GameService],
