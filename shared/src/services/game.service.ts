@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Inject } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { Board, Game } from '../schemas';
@@ -10,6 +10,8 @@ import { AnalysisResult, GameMove, MovementDirection, MoveQuality, Step } from '
 import { RABBITMQ_QUEUE } from '../constants/rabbitmq.constants';
 import { IGameRepository } from '../interfaces/game-repository.interface';
 import { IBoardRepository } from '../interfaces/board-repository.interface';
+import { GAME_REPOSITORY } from '../constants/game.constant';
+import { BOARD_REPOSITORY } from '../constants/board.constant';
 
 type Position = [number, number];
 
@@ -105,7 +107,9 @@ export class GameService {
     private readonly MAX_SEARCH_STATES = 100000;
     private readonly PARALLEL_CHUNK_SIZE = 1000;
     constructor(
+        @Inject(GAME_REPOSITORY)
         private readonly gameRepository: IGameRepository,
+        @Inject(BOARD_REPOSITORY)
         private readonly boardRepository: IBoardRepository,
         private readonly redisService: RedisService,
         private readonly rabbitMQService: RabbitMQService,

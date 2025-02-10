@@ -3,7 +3,9 @@ import { NestFactory } from '@nestjs/core';
 import { CleanupModule } from './cleanup/cleanup.module';
 
 async function bootstrap() {
-  const app = await NestFactory.create(CleanupModule);
+  const app = await NestFactory.create(CleanupModule, {
+    logger: ['error', 'warn', 'debug', 'log'],
+  });
   app.useGlobalPipes(new ValidationPipe({
     transform: true,
     whitelist: true,

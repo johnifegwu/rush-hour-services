@@ -16,7 +16,8 @@ COPY shared ./shared
 
 # Install dependencies
 #RUN npm ci
-RUN npm install --force
+RUN npm install --force && \
+    npm install -g nx @nrwl/cli
 
 # Build the application (Changed this line)
 RUN npx nx build api

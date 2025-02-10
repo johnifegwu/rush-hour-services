@@ -1,7 +1,8 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { RedisService } from '../../../../shared/src/services/redis.service';
 import { IGameRepository } from '../../../../shared/src/interfaces/game-repository.interface';
+import { GAME_REPOSITORY } from '../../../../shared/src/constants/game.constant';
 
 export interface CleanupSummary {
     timestamp: Date;
@@ -17,12 +18,17 @@ export class CleanupService {
     private cleanupHistory: CleanupSummary[] = [];
 
     constructor(
+        @Inject(GAME_REPOSITORY)
         private readonly gameRepository: IGameRepository,
         private readonly redisService: RedisService
-    ) { }
+    ) {
+        this.logger.log('CleanupService initialized');
+    }
 
     @Cron(CronExpression.EVERY_10_SECONDS)
     async handleGameCleanup() {
+        const startTime = Date.now();
+        this.logger.debug('Starting cron job');
         const summary: CleanupSummary = {
             timestamp: new Date(),
             gamesDeleted: 0,
@@ -54,6 +60,8 @@ export class CleanupService {
             summary.redisKeysDeleted = redisResults.filter(Boolean).length;
             summary.success = true;
 
+            const duration = Date.now() - startTime;
+            this.logger.debug(`Cron job completed in ${duration}ms`);
             this.logger.log(`Cleanup completed: ${summary.gamesDeleted} games deleted`);
         } catch (error: unknown) {
             summary.success = false;

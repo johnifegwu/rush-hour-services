@@ -1,29 +1,33 @@
-
 import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
+import { ConfigModule, ConfigService } from '@nestjs/config';
+import { RepositoryModule } from './repository.module';
+import { RedisModule } from './redis.module';
+import { RabbitMQModule } from './rabbitmq.module';
 import { GameService } from '../services/game.service';
-import { GameMongoRepository } from '../infrastructure/mongodb/game.repository';
-import { BoardMongoRepository } from '../infrastructure/mongodb/board.repository';
-import { Game, GameSchema } from '../schemas/game.schema';
-import { Board, BoardSchema } from '../schemas/board.schema';
+import { RedisService } from '../services/redis.service';
+import { RabbitMQService } from '../services/rabbitmq.service';
 
 @Module({
     imports: [
-        MongooseModule.forFeature([
-            { name: Game.name, schema: GameSchema },
-            { name: Board.name, schema: BoardSchema }
-        ])
+        ConfigModule.forRoot(),
+        MongooseModule.forRootAsync({
+            imports: [ConfigModule],
+            useFactory: async (configService: ConfigService) => ({
+                uri: configService.get<string>('MONGO_URI', 'mongodb://mongodb:27017'),
+                useNewUrlParser: true,
+                useUnifiedTopology: true,
+            }),
+            inject: [ConfigService],
+        }),
+        RepositoryModule,
+        RedisModule,
+        RabbitMQModule
     ],
     providers: [
         GameService,
-        {
-            provide: 'IGameRepository',
-            useClass: GameMongoRepository
-        },
-        {
-            provide: 'IBoardRepository',
-            useClass: BoardMongoRepository
-        }
+        RedisService,
+        RabbitMQService
     ],
     exports: [GameService]
 })

@@ -1,0 +1,1 @@
+export const BOARD_REPOSITORY = 'BOARD_REPOSITORY';

@@ -8,7 +8,8 @@ import { BaseMongoRepository } from './base.repository';
 @Injectable()
 export class BoardMongoRepository extends BaseMongoRepository<Board> implements IBoardRepository {
     constructor(
-        @InjectModel(Board.name) private boardModel: Model<Board>
+        @InjectModel(Board.name)
+        private readonly boardModel: Model<Board>
     ) {
         super(boardModel);
     }

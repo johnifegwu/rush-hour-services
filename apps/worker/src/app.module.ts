@@ -7,8 +7,7 @@ import { GameModule } from '../../../shared/src/modules/game.module';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { MoveAnalysisConsumer } from './move-analysis.consumer';
 import { MoveQualityConsumer } from './move-quality.consumer';
-import { Board, BoardSchema } from 'shared/src/schemas/board.schema';
-import { Game, GameSchema } from 'shared/src/schemas/game.schema';
+import { RepositoryModule } from '../../../shared/src/modules/repository.module';
 import { RedisService } from 'shared/src/services/redis.service';
 import { RabbitMQService } from 'shared/src/services/rabbitmq.service';
 import { GameService } from '../../../shared/src/services/game.service';
@@ -25,10 +24,7 @@ import { GameService } from '../../../shared/src/services/game.service';
             }),
             inject: [ConfigService],
         }),
-        MongooseModule.forFeature([
-            { name: Board.name, schema: BoardSchema },
-            { name: Game.name, schema: GameSchema }
-        ]),
+        RepositoryModule,
         RabbitMQModule,
         RedisModule,
         GameModule

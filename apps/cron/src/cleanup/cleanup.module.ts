@@ -1,18 +1,18 @@
 import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
+import { ScheduleModule } from '@nestjs/schedule';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { CleanupService } from './cleanup.service';
 import { RabbitMQModule } from '../../../../shared/src/modules/rabbitmq.module';
 import { RedisModule } from '../../../../shared/src/modules/redis.module';
 import { GameModule } from '../../../../shared/src/modules/game.module';
 import { RedisService } from '../../../../shared/src/services/redis.service';
-import { Game, GameSchema } from '../../../../shared/src/schemas/game.schema';
-import { GameMongoRepository } from '../../../../shared/src/infrastructure/mongodb/game.repository';
-import { BoardMongoRepository } from '../../../../shared/src/infrastructure/mongodb/board.repository';
+import { RepositoryModule } from '../../../../shared/src/modules/repository.module';
 
 @Module({
     imports: [
         ConfigModule.forRoot(),
+        ScheduleModule.forRoot(), // This is crucial for cron jobs
         MongooseModule.forRootAsync({
             imports: [ConfigModule],
             useFactory: async (configService: ConfigService) => ({
@@ -22,21 +22,11 @@ import { BoardMongoRepository } from '../../../../shared/src/infrastructure/mong
             }),
             inject: [ConfigService],
         }),
-        MongooseModule.forFeature([
-            { name: Game.name, schema: GameSchema }
-        ]),
+        RepositoryModule,
         RabbitMQModule,
         RedisModule,
         GameModule
     ],
-    providers: [CleanupService, RedisService,
-        {
-            provide: 'IGameRepository',
-            useClass: GameMongoRepository
-        },
-        {
-            provide: 'IBoardRepository',
-            useClass: BoardMongoRepository
-        }],
+    providers: [CleanupService, RedisService],
 })
 export class CleanupModule { }

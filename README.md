@@ -96,7 +96,6 @@ Features Implemented
 ```
 npm install --legacy-peer-deps
 
-npm install
 npx nx test shared --testFile=game.service.spec.ts
 npx nx test cron --test-file=apps/cron/src/cleanup/cleanup.service.spec.ts
 npx nx test worker --test-file=apps/worker/src/move-analysis.consumer.spec.ts
@@ -122,6 +121,13 @@ Sample Board:
     [5, 5, 0, 6, 4, 0],
     [0, 7, 7, 6, 0, 0]
   ]
+}
+```
+
+Start Game Sample Payload:
+```
+{
+  "boardId": "67a99a8acdd125b885fae10b"
 }
 ```
 

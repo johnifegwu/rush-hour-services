@@ -6,9 +6,9 @@ import { ApiController } from './api.controller';
 import { ApiService } from './api.service';
 import { GameModule } from '../../../shared/src/modules/game.module';
 import { RabbitMQModule } from '../../../shared/src/modules/rabbitmq.module';
+import { RepositoryModule } from '../../../shared/src/modules/repository.module';
 import { RedisModule } from '../../../shared/src/modules/redis.module';
 import { GameService } from '../../../shared/src/services';
-import { Board, BoardSchema, Game, GameSchema } from '../../../shared/src/schemas';
 
 @Module({
     imports: [
@@ -22,15 +22,11 @@ import { Board, BoardSchema, Game, GameSchema } from '../../../shared/src/schema
             }),
             inject: [ConfigService],
         }),
-        MongooseModule.forFeature([
-            { name: Board.name, schema: BoardSchema },
-            { name: Game.name, schema: GameSchema }
-        ]),
         CacheModule.register({
             ttl: 300, // 5 minutes
             max: 10000 // maximum number of items in cache
         }),
-        RedisModule, RabbitMQModule, GameModule
+        RepositoryModule, RedisModule, RabbitMQModule, GameModule
     ],
     controllers: [ApiController],
     providers: [ApiService, GameService],
